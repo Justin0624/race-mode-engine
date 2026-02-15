@@ -14,4 +14,5 @@ export default function CoachPage() {
       onProfileClick={() => navigate('/profile')}
       onLoginClick={() => navigate('/')}
     />
+  )
 }
