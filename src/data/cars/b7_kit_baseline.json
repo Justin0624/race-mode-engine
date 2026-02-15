@@ -1,0 +1,62 @@
+{
+  "vehicle": "RC10B7",
+  "setup_type": "Kit Baseline (Carpet)",
+  "verified": true,
+  "verified_date": "2025-02",
+  "source": "Team Associated RC10B7 Kit Setup Sheet (PDF)",
+  "front_suspension": {
+    "ride_height": "13mm",
+    "camber": "-1 degree",
+    "toe": "0 degree",
+    "anti_roll_bar": "1.0mm",
+    "kick_up_angle": "0 degree",
+    "caster_block_insert": "+2.5",
+    "steering_block_kpi": "2",
+    "steering_plate": "+1",
+    "bellcrank_position": "Up",
+    "axle_height": "+3",
+    "wheel_hex": "6.5mm",
+    "bulkhead_type": "Aluminum"
+  },
+  "front_shocks": {
+    "piston": "2x1.6",
+    "piston_thickness": "2.5mm",
+    "fluid": "35wt",
+    "spring": "Orange",
+    "stroke": "23.5mm",
+    "eyelet": "0",
+    "cup_offset": "+5"
+  },
+  "rear_suspension": {
+    "ride_height": "13mm",
+    "camber": "-1 degree",
+    "anti_roll_bar": "1.2mm",
+    "axle_height": "+2",
+    "wheel_hex": "5mm",
+    "hub_type": "HRC",
+    "hub_spacing": "Mid",
+    "arm_spacing": "Mid",
+    "drive_shaft": "CVAs"
+  },
+  "rear_shocks": {
+    "piston": "2x1.9",
+    "piston_thickness": "2.5mm",
+    "fluid": "30wt",
+    "spring": "Gray",
+    "stroke": "27.5mm",
+    "eyelet": "+2",
+    "cup_offset": "0"
+  },
+  "drivetrain": {
+    "differential_type": "Gear Diff",
+    "diff_fluid": "30k",
+    "diff_height": "2",
+    "battery_position": "3",
+    "battery_mount": "Std"
+  },
+  "body": {
+    "wing_angle": "6 degrees",
+    "rear_wing": "RC10B7 7in",
+    "front_wing": "RC10B7"
+  }
+}
