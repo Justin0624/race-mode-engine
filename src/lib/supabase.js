@@ -1,16 +1,21 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
+// Supabase is optional — app works without it (guest mode)
 let supabase = null
+let supabaseReady = false
 
-try {
-  if (supabaseUrl && supabaseAnonKey) {
-    supabase = createClient(supabaseUrl, supabaseAnonKey)
+async function initSupabase() {
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+    if (!url || !key || !url.startsWith('http')) return
+    const { createClient } = await import('@supabase/supabase-js')
+    supabase = createClient(url, key)
+    supabaseReady = true
+  } catch (e) {
+    console.warn('Supabase unavailable — running in guest mode')
   }
-} catch (e) {
-  console.warn('Supabase init failed:', e)
 }
 
-export { supabase }
+// Fire and forget — don't block app load
+initSupabase()
+
+export { supabase, supabaseReady }
