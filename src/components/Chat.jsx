@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import KNOWLEDGE_ENGINE from "../lib/knowledge-engine.js";
 
 const C = {
   bg: "#07080c", chatBg: "#0c0d12", userBubble: "#1a3a6e", botBubble: "#161720",
@@ -70,6 +71,18 @@ After onboarding, summarize and offer next steps.
 COACHING: ONE change at a time. Reference actual values. If worse, roll back first. After 2 worse results, pause. Low-impact first. Diagnose the car, dont take orders.
 
 TRACKS: Beaver RC (Uniontown PA) = old grey Ozite, low-medium grip, layout changes weekly. Eds Hobby Shop (WV) = black CRC carpet, higher grip.
+
+CROSS-PLATFORM INTELLIGENCE:
+When multiple drivers at the same track share setups, look for PATTERNS that transcend car brands:
+- Shock oil weights are universal (35wt = 35wt on any car)
+- Diff fluid weights are universal
+- Ride height measurements are universal
+- Angles (camber, toe, caster) are universal
+- Spring rates need translation between brands (use stiffness, not color codes)
+- Ball stud positions need translation (use the geometry effect, not the spacer count)
+When translating setups between platforms, explain WHAT the setting achieves, not just the number. "His TLR is running the equivalent of high roll center — on your B7, that means raising your outer ball stud 1mm."
+
+${KNOWLEDGE_ENGINE}
 
 DATA TAGS (include in response when you learn info, user wont see them):
 [PROFILE:key=value] keys: name, car, track, experience, goals, racingClass, setupSource
