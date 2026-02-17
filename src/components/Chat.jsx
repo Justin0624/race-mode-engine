@@ -1,356 +1,174 @@
 import { useState, useRef, useEffect } from "react";
 
-// ── Theme ──
 const C = {
   bg: "#07080c", chatBg: "#0c0d12", userBubble: "#1a3a6e", botBubble: "#161720",
-  botBorder: "#252630", accent: "#3b82f6", accentSoft: "#3b82f620", green: "#22c55e",
+  botBorder: "#252630", accent: "#3b82f6", green: "#22c55e",
   greenSoft: "#22c55e18", yellow: "#eab308", red: "#ef4444",
   text: "#e2e2e8", textDim: "#8b8b9e", textMuted: "#55556a", white: "#fff",
   border: "#1e1f2a", inputBg: "#111218", inputBorder: "#2a2b38",
-  modeBg: "#1a1b26", modeBorder: "#2a2b3a", modeActive: "#253a6a",
+  navBg: "#0a0b10", navBorder: "#1a1b25", navActive: "#3b82f6",
 };
 
-// ── B7 Kit Baseline ──
 const B7_KIT = {
-  car: "Team Associated RC10B7", type: "2WD Buggy",
-  front: { springs:"Orange", shock_oil:"35wt", ride_height:"13mm", camber:"-1°", toe:"0°", arb:"1.0mm", kick_up:"0°", caster_insert:"+2.5", kpi:"2", steering_plate:"+1", bellcrank:"Up", piston:"2x1.6", piston_thickness:"2.5mm", stroke:"23.5mm", eyelet:"0", cup_offset:"+5", axle_height:"+3", wheel_hex:"6.5mm" },
-  rear: { springs:"Gray", shock_oil:"30wt", ride_height:"13mm", camber:"-1°", arb:"1.2mm", piston:"2x1.9", piston_thickness:"2.5mm", stroke:"27.5mm", eyelet:"+2", cup_offset:"0", axle_height:"+2", wheel_hex:"5mm", hub_type:"HRC", hub_spacing:"Mid", arm_spacing:"Mid", drive_shaft:"CVAs" },
-  drivetrain: { diff_type:"Gear Diff", diff_fluid:"30k", diff_height:"2", battery_position:"3", battery_mount:"Std" },
-  body: { wing_angle:"6°", rear_wing:'RC10B7 7"', front_wing:"RC10B7" },
+  front_springs:"Orange",front_shock_oil:"35wt",rear_springs:"Gray",rear_shock_oil:"30wt",
+  diff_fluid:"30k",front_ride_height:"13mm",rear_ride_height:"13mm",kick_up:"0deg",
+  battery_position:"3",wing_angle:"6deg",front_arb:"1.0mm",rear_arb:"1.2mm",
+  front_camber:"-1deg",rear_camber:"-1deg",front_toe:"0deg",front_piston:"2x1.6",
+  rear_piston:"2x1.9",caster_insert:"+2.5",kpi:"2",rear_axle_height:"+2",
+  front_axle_height:"+3",front_eyelet:"0",rear_eyelet:"+2",front_cup_offset:"+5",
+  rear_cup_offset:"0",front_stroke:"23.5mm",rear_stroke:"27.5mm",
+  steering_plate:"+1",bellcrank:"Up",diff_height:"2",diff_type:"Gear Diff",
+  slipper_type:"HD",hub_spacing:"Mid",arm_spacing:"Mid",
+  front_wheel_hex:"6.5mm",rear_wheel_hex:"5mm",
 };
 
-// ── System Prompt ──
-function buildSystemPrompt(profile, setup, sessionLog, mode) {
-  return `You are the Race Mode Engine — an expert AI pit crew chief for 1/10 scale RC racing. You specialize in Team Associated vehicles (RC10B7, B84, T7) on carpet surfaces.
+const LBL = {
+  front_springs:"Front Springs",front_shock_oil:"Front Oil",rear_springs:"Rear Springs",
+  rear_shock_oil:"Rear Oil",diff_fluid:"Diff Fluid",front_ride_height:"Front Ride Height",
+  rear_ride_height:"Rear Ride Height",kick_up:"Kick-Up",battery_position:"Battery Pos",
+  wing_angle:"Wing Angle",front_arb:"Front ARB",rear_arb:"Rear ARB",front_camber:"Front Camber",
+  rear_camber:"Rear Camber",front_toe:"Front Toe",front_piston:"Front Piston",rear_piston:"Rear Piston",
+  caster_insert:"Caster",kpi:"KPI",rear_axle_height:"Rear Axle Height",
+  front_axle_height:"Front Axle Height",front_eyelet:"Front Eyelet",rear_eyelet:"Rear Eyelet",
+  front_cup_offset:"Front Cup Offset",rear_cup_offset:"Rear Cup Offset",
+  front_stroke:"Front Stroke",rear_stroke:"Rear Stroke",steering_plate:"Steering Plate",
+  bellcrank:"Bellcrank",diff_height:"Diff Height",diff_type:"Diff Type",
+  slipper_type:"Slipper",hub_spacing:"Hub Spacing",arm_spacing:"Arm Spacing",
+  front_wheel_hex:"Front Hex",rear_wheel_hex:"Rear Hex",
+};
 
-PERSONALITY:
-- Talk like a knowledgeable friend at the track, not a textbook
-- Be encouraging but honest
-- Use "we" language — "let's try..." not "you should..."
-- Keep responses concise (2-4 sentences usually, longer when teaching)
-- Never overwhelm — answer what was asked
-- Use **bold** for important values and settings
-- Every 1mm matters in 1/10 scale
+function buildSys(prof, setup, sessions) {
+  const sStr = setup ? Object.entries(setup).filter(([,v])=>v&&v!=="unknown").map(([k,v])=>`${LBL[k]||k}: ${v}${B7_KIT[k]&&v!==B7_KIT[k]?` (kit: ${B7_KIT[k]})`:""}`).join("\n") : "No setup loaded.";
+  const pStr = prof ? `Name: ${prof.name||"?"}, Car: ${prof.car||"?"}, Track: ${prof.track||"?"}, Experience: ${prof.experience||"?"}, Goals: ${prof.goals||"?"}, Class: ${prof.racingClass||"?"}, Setup source: ${prof.setupSource||"?"}` : "No profile — first-time user.";
+  const hStr = sessions?.length ? sessions.slice(-5).map(s=>`[${s.date}] ${s.notes}`).join("\n") : "None.";
 
-USER PROFILE:
-${profile.name ? `Name: ${profile.name}` : "Name: Unknown"}
-${profile.car ? `Car: ${profile.car}` : "Car: Unknown"}
-${profile.track ? `Home Track: ${profile.track}` : "Home Track: Unknown"}
-${profile.experience ? `Experience Level: ${profile.experience}` : "Experience: Unknown"}
-${profile.struggle ? `Biggest Struggle: ${profile.struggle}` : ""}
-${profile.racingClass ? `Class: ${profile.racingClass}` : ""}
-${profile.carCondition ? `Car Condition: ${profile.carCondition}` : ""}
-${profile.goals ? `Goals: ${profile.goals}` : ""}
+  return `You are Race Mode Engine, an AI pit crew chief for 1/10 scale RC carpet racing. Expert on Team Associated RC10B7, B84, T7.
 
-EXPERIENCE CALIBRATION:
-${profile.experience === "beginner" ? "User is brand new. Explain EVERYTHING plainly. Define terms before using them. Be patient. Never assume knowledge." :
-  profile.experience === "intermediate" ? "User knows basics. Explain 'why' behind changes. Don't define springs/shocks but do explain geometry." :
-  profile.experience === "advanced" ? "User is experienced. Be technical and direct. Focus on nuance and track-specific tuning." :
-  "Calibrate based on their questions. Match their technical level."}
+PERSONALITY: Talk like an experienced racer who is patient and encouraging. Concise (2-4 sentences, longer when teaching). Never judge. Bold sparingly. No emoji except occasional flag. Sound like a real person, not a chatbot.
 
-CURRENT SETUP:
-${JSON.stringify(setup, null, 2)}
+ROLES:
+1. COACH: Race night tuning. One change at a time. Reference actual values. Roll back if worse.
+2. SETUP SHEET: Track every setting. Know kit vs changed vs unknown.
+3. LOGBOOK: Remember sessions, changes, results.
+4. MANUAL: Explain concepts plainly. Always cover what MORE does, what LESS does, which settings control it.
+5. TEACHER: Match driver experience. Beginners get "why." Advanced get direct answers.
 
-B7 KIT BASELINE (factory starting point):
-${JSON.stringify(B7_KIT, null, 2)}
+DRIVER: ${pStr}
+SETUP: ${sStr}
+KIT BASELINE: ${Object.entries(B7_KIT).map(([k,v])=>`${LBL[k]||k}: ${v}`).join(", ")}
+SESSIONS: ${hStr}
 
-SESSION LOG:
-${sessionLog.length > 0 ? sessionLog.map((s,i) => `${i+1}. ${s}`).join("\n") : "No changes yet."}
+FIRST-TIME ONBOARDING:
+If no profile, build one through natural conversation like meeting someone at the track. Learn: name, car, situation (kit build? used? racing a while?), how they got their setup, home track, experience level, what they want from the app.
 
-CURRENT MODE: ${mode}
+PATHS:
+- Kit build: Load kit baseline, explain what they have, what to expect at the track
+- Used car/unknown setup: Help identify parts visually (spring colors, shock fluid, gear teeth). Mark unknowns. Give bench checklist.
+- Experienced: Quick capture of known changes, fill rest as kit
+After onboarding, summarize and offer next steps.
 
-MODE BEHAVIOR:
+COACHING: ONE change at a time. Reference actual values. If worse, roll back first. After 2 worse results, pause. Low-impact first. Diagnose the car, dont take orders.
 
-${mode === "onboarding" ? `ONBOARDING — First-time setup. Have a natural conversation to learn:
-1. Their name
-2. What car they run (B7, B84, T7)
-3. Home track and surface type
-4. Experience level with setup
-5. How they got their car (built from kit? bought used? hand-me-down?)
-6. Current setup situation (on kit setup? modified? unknown?)
-7. What they want from this app
-8. Racing class (17.5T stock, 13.5T mod, etc)
+TRACKS: Beaver RC (Uniontown PA) = old grey Ozite, low-medium grip, layout changes weekly. Eds Hobby Shop (WV) = black CRC carpet, higher grip.
 
-Ask ONE question at a time. React naturally. Don't rush through a checklist — have a real conversation.
-
-KEY SCENARIOS:
-- If they BUILT FROM KIT: confirm kit baseline, explain what that means for their level
-- If they BOUGHT USED and don't know setup: ask if they want help figuring it out (Detective mode). Guide them through visual checks.
-- If they have a MODIFIED setup: ask them to describe what's different from kit
-- If they're BRAND NEW: be extra welcoming, explain the app will grow with them
-
-When you have enough info (usually 6-8 exchanges), give a summary of what you know and tell them about the modes available:
-🏁 Coach — live race-night coaching, one change at a time
-📋 Logbook — view/edit their full setup, track changes
-📘 Manual — learn any RC concept, connected to their car
-🔍 Detective — figure out unknown settings by visual inspection
-🎯 Prep — pre-race planning and checklists
-
-Ask which they'd like to start with.` :
-
-mode === "detective" ? `SETUP DETECTIVE — Help user figure out their setup by visual inspection.
-Guide through HIGH-IMPACT settings first:
-- Spring colors (front and rear)
-- Shock oil (any writing on bottles they have, or on shock bodies)
-- Ride height (with ruler)
-- Diff fluid weight
-- Kick-up angle
-- Battery position
-- Caster block inserts
-
-Walk step by step: "Flip the car over — what color are the front springs?"
-For each answer, confirm: "Red front springs — stiffer than kit Orange. More responsive steering."
-For unknown settings, mark as unknown and move on.
-After high-impact settings, ask about secondary settings if they want to continue.
-Summarize findings when done.` :
-
-mode === "logbook" ? `LOGBOOK — User's car record.
-- Show current setup when asked
-- Accept changes: "I changed front springs to Red" → confirm change and what it means
-- Compare to kit baseline
-- Log notes about sessions
-- Track history of changes
-When showing setup, organize by section (Front, Rear, Drivetrain, Body) and bold anything different from kit.` :
-
-mode === "manual" ? `MANUAL / TEACHING — Explain RC concepts.
-For each concept explain:
-1. WHAT it is (plain language)
-2. MORE of it does what (and when you'd want more)
-3. LESS of it does what (and when you'd want less)
-4. HOW to change it on their car specifically
-5. What THEIR current setting is
-
-Connect to their track: "At ${profile.track || "your track"}, you'd typically want..."
-Use analogies for beginners. Be technical for advanced users.` :
-
-mode === "coach" ? `RACE NIGHT COACH — User is at the track.
-RULES:
-1. ONE change at a time. Never suggest multiple.
-2. Reference ACTUAL current values: "Your front oil is **35wt** — drop to **30wt**"
-3. After testing, ask how it went
-4. BETTER: log it, keep dialing
-5. WORSE: roll back immediately
-6. TWO consecutive "worse": pump the brakes, suggest rolling back to best setup
-7. If it feels good but slow: "Don't touch setup. Speed = lines + consistency."
-8. Ask about track conditions first if unknown
-
-Start by asking: what track, what layout, how's the grip today?` :
-
-mode === "prep" ? `PRE-RACE PREP — Before heading to the track.
-Help with:
-- Setup review for the track they're visiting
-- Changes to consider for the surface/conditions
-- Tire and gear recommendations
-- Checklist (batteries charged, parts bag, tools, spares)
-- Strategy (practice plan, what to focus on)
-
-If going to a new track, explain surface differences and suggest adjustments.
-If going to home track, review current setup and any changes from last time.` : ""}
-
-ALWAYS:
-- If user asks "what is [concept]?" — explain it regardless of mode
-- Keep mental model of setup changes
-- Never fabricate settings
-- If frustrated, acknowledge and simplify
-- Use their name occasionally (not every message)`;
+DATA TAGS (include in response when you learn info, user wont see them):
+[PROFILE:key=value] keys: name, car, track, experience, goals, racingClass, setupSource
+[SETUP:key=value] keys use underscores: front_springs, diff_fluid, etc
+[SETUP:key=unknown] mark unknown
+[LOG:note text]
+Always include tags when conversation reveals new info.`;
 }
 
-// ── AI Call ──
-async function callAI(messages, systemPrompt) {
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: systemPrompt, messages }),
-    });
-    const data = await res.json();
-    return data.content?.map(b => b.text || "").join("") || "Sorry, I had trouble responding. Try again?";
-  } catch (err) {
-    console.error("AI error:", err);
-    return "I'm having trouble connecting. Check your connection and try again.";
-  }
+async function ask(msgs, sys) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: sys,
+      messages: msgs.map(m => ({ role: m.role === "bot" ? "assistant" : "user", content: m.text }))
+    })
+  });
+  const d = await r.json();
+  return d.content?.map(c => c.text || "").join("\n") || "Something went wrong.";
 }
 
-// ── Components ──
-function Dots() {
-  return (
-    <div style={{ display: "flex", gap: 4, padding: "8px 0", alignItems: "center" }}>
-      {[0,1,2].map(i => <div key={i} style={{ width:7, height:7, borderRadius:"50%", background:C.textMuted, animation:`tp 1.2s ease-in-out ${i*0.15}s infinite` }}/>)}
-      <style>{`@keyframes tp{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}`}</style>
-    </div>
-  );
+function parse(text) {
+  const pu={},su={},logs=[];let c=text;
+  for(const m of text.matchAll(/\[PROFILE:(\w+)=(.+?)\]/g)){pu[m[1]]=m[2];c=c.replace(m[0],"");}
+  for(const m of text.matchAll(/\[SETUP:([\w_]+)=(.+?)\]/g)){su[m[1]]=m[2];c=c.replace(m[0],"");}
+  for(const m of text.matchAll(/\[LOG:(.+?)\]/g)){logs.push(m[1]);c=c.replace(m[0],"");}
+  return{c:c.trim(),pu,su,logs};
 }
 
-const MODES = [
-  { id:"coach", icon:"🏁", label:"Coach" },
-  { id:"logbook", icon:"📋", label:"Logbook" },
-  { id:"manual", icon:"📘", label:"Manual" },
-  { id:"detective", icon:"🔍", label:"Detective" },
-  { id:"prep", icon:"🎯", label:"Prep" },
-];
+function Dots(){return(<div style={{display:"flex",gap:4,padding:"8px 0",alignItems:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:7,height:7,borderRadius:"50%",background:C.textMuted,animation:`tp 1.2s ease-in-out ${i*.15}s infinite`}}/>)}<style>{`@keyframes tp{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}`}</style></div>);}
 
-function ModeBar({ mode, setMode, onSwitch }) {
-  return (
-    <div style={{ display:"flex", gap:4, padding:"6px 12px", overflowX:"auto", borderBottom:`1px solid ${C.border}`, background:C.chatBg, flexShrink:0 }}>
-      {MODES.map(m => (
-        <button key={m.id} onClick={() => { setMode(m.id); onSwitch(m.id); }}
-          style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", borderRadius:14,
-            background: mode===m.id ? C.modeActive : C.modeBg,
-            border:`1px solid ${mode===m.id ? C.accent+"50" : C.modeBorder}`,
-            color: mode===m.id ? C.accent : C.textMuted, fontSize:12, cursor:"pointer",
-            fontFamily:"inherit", whiteSpace:"nowrap", transition:"all 0.15s" }}>
-          <span>{m.icon}</span> {m.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+const SEC={"Front":["front_springs","front_shock_oil","front_ride_height","kick_up","front_arb","front_camber","front_toe","caster_insert","kpi","front_piston","front_stroke","front_eyelet","front_cup_offset","front_axle_height","front_wheel_hex"],"Rear":["rear_springs","rear_shock_oil","rear_ride_height","rear_arb","rear_camber","rear_piston","rear_stroke","rear_eyelet","rear_cup_offset","rear_axle_height","rear_wheel_hex","hub_spacing","arm_spacing"],"Drive":["diff_type","diff_fluid","diff_height","battery_position","slipper_type"],"Aero":["wing_angle","steering_plate","bellcrank"]};
 
-// ── Main ──
-export default function RaceModeV5() {
-  const [msgs, setMsgs] = useState([]);
-  const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
-  const [mode, setMode] = useState("onboarding");
-  const [showModes, setShowModes] = useState(false);
-  const [profile, setProfile] = useState({ name:"", car:"", track:"", experience:"", struggle:"", racingClass:"", carCondition:"", goals:"" });
-  const [setup, setSetup] = useState({ ...B7_KIT });
-  const [sessionLog, setSessionLog] = useState([]);
-  const [history, setHistory] = useState([]);
-  const endRef = useRef(null);
+function SetupView({setup}){const[tab,setTab]=useState("Front");if(!setup)return null;return(<div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}><div style={{display:"flex",borderBottom:`1px solid ${C.border}`}}>{Object.keys(SEC).map(s=>(<div key={s} onClick={()=>setTab(s)} style={{flex:1,padding:"8px 4px",fontSize:10,textAlign:"center",color:tab===s?C.accent:C.textMuted,borderBottom:`2px solid ${tab===s?C.accent:"transparent"}`,cursor:"pointer"}}>{s}</div>))}</div><div style={{maxHeight:240,overflowY:"auto"}}>{(SEC[tab]||[]).map(k=>{const v=setup[k];if(!v||v==="")return null;const kit=v===B7_KIT[k],unk=v==="unknown";return(<div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 12px",borderBottom:`1px solid ${C.border}22`,borderLeft:unk?`3px solid ${C.yellow}`:!kit?`3px solid ${C.accent}`:"3px solid transparent"}}><span style={{fontSize:11,color:C.textDim}}>{LBL[k]||k}</span><span style={{fontSize:12,fontWeight:kit?400:600,color:unk?C.yellow:kit?C.textDim:C.white}}>{unk?"? check":v}</span></div>);})}</div><div style={{padding:"6px 12px",display:"flex",gap:12,borderTop:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:3,height:10,background:C.accent,borderRadius:1}}/><span style={{fontSize:9,color:C.textMuted}}>Changed</span></div><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:3,height:10,background:C.yellow,borderRadius:1}}/><span style={{fontSize:9,color:C.textMuted}}>Unknown</span></div></div></div>);}
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior:"smooth" }); }, [msgs, typing]);
+export default function App(){
+  const[tab,setTab]=useState("chat");
+  const[msgs,setMsgs]=useState([]);
+  const[input,setInput]=useState("");
+  const[busy,setBusy]=useState(false);
+  const[prof,setProf]=useState(null);
+  const[setup,setSetup]=useState(null);
+  const[sessions,setSessions]=useState([]);
+  const end=useRef(null);
 
-  // Welcome
-  useEffect(() => {
-    const w = "Hey! 🏁 Welcome to **Race Mode**.\n\nI'm your AI pit crew chief — think of me as that fast guy at the track who actually wants to help you get better.\n\nI'll learn your car, your track, and how you race so everything I tell you is tailored to you.\n\nLet's start simple — **what's your name?**";
-    setMsgs([{ role:"bot", text:w }]);
-    setHistory([{ role:"assistant", content:w }]);
-  }, []);
+  useEffect(()=>{end.current?.scrollIntoView({behavior:"smooth"});},[msgs,busy]);
+  useEffect(()=>{go([{role:"user",text:"I just opened the Race Mode app for the first time. Start the onboarding."}],true);},[]);
 
-  const send = async () => {
-    if (!input.trim() || typing) return;
-    const text = input.trim();
-    setInput("");
-    setMsgs(p => [...p, { role:"user", text }]);
-    setTyping(true);
-
-    const newHist = [...history, { role:"user", content:text }];
-    const sys = buildSystemPrompt(profile, setup, sessionLog, mode);
-    const reply = await callAI(newHist, sys);
-
-    setHistory([...newHist, { role:"assistant", content:reply }]);
-    setMsgs(p => [...p, { role:"bot", text:reply }]);
-    setTyping(false);
-
-    // Extract profile hints during onboarding
-    if (mode === "onboarding") {
-      const lo = text.toLowerCase();
-      if (!profile.name && history.length <= 3) {
-        const words = text.trim().split(/\s+/);
-        if (words.length <= 3) {
-          const name = words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
-          setProfile(p => ({ ...p, name }));
-        }
-      }
-      if (lo.includes("b7")) setProfile(p => ({ ...p, car:"RC10B7" }));
-      if (lo.includes("b84")) setProfile(p => ({ ...p, car:"RC10B84" }));
-      if (lo.includes("t7")) setProfile(p => ({ ...p, car:"RC10T7" }));
-      if (lo.includes("beaver")) setProfile(p => ({ ...p, track:"Beaver RC" }));
-      if (lo.includes("ed's") || lo.includes("eds") || lo.includes("ed ")) setProfile(p => ({ ...p, track:"Ed's Hobby Shop" }));
-      if (lo.includes("used") || lo.includes("bought")) setProfile(p => ({ ...p, carCondition:"used" }));
-      if (lo.includes("kit") || lo.includes("built") || lo.includes("new")) setProfile(p => ({ ...p, carCondition:"kit-built" }));
-
-      // Show mode bar when AI wraps up onboarding
-      const rLo = reply.toLowerCase();
-      if (rLo.includes("coach") && rLo.includes("logbook") && rLo.includes("manual") || 
-          rLo.includes("which") && (rLo.includes("mode") || rLo.includes("start") || rLo.includes("like to"))) {
-        setShowModes(true);
-      }
+  const go=async(h,init=false)=>{
+    setBusy(true);
+    try{
+      const raw=await ask(h,buildSys(prof,setup,sessions));
+      const{c,pu,su,logs}=parse(raw);
+      if(Object.keys(pu).length)setProf(p=>({...(p||{}),...pu}));
+      if(Object.keys(su).length)setSetup(p=>({...(p||{...B7_KIT}),...su}));
+      if(logs.length)setSessions(p=>[...p,...logs.map(l=>({date:new Date().toLocaleDateString(),notes:l}))]);
+      if(init)setMsgs([{role:"bot",text:c}]);else setMsgs(p=>[...p,{role:"bot",text:c}]);
+    }catch(e){
+      const err="Connection issue. Check internet and try again.";
+      if(init)setMsgs([{role:"bot",text:err}]);else setMsgs(p=>[...p,{role:"bot",text:err}]);
     }
+    setBusy(false);
   };
 
-  const switchMode = (newMode) => {
-    const intros = {
-      coach: "🏁 **Coach Mode** — Tell me what the car is doing. I'll give you one change to try.",
-      logbook: "📋 **Logbook** — Your complete car setup. Check settings, make changes, compare to kit.",
-      manual: "📘 **Manual** — Ask me about anything. \"What is anti-squat?\" \"How does caster work?\" I'll explain it using your car as the example.",
-      detective: "🔍 **Detective** — Let's figure out what your car is set to. Grab your car — I'll walk you through it.",
-      prep: "🎯 **Pre-Race Prep** — Where are you racing next? Let's make sure you're ready.",
-    };
-    const intro = intros[newMode];
-    setMsgs(p => [...p, { role:"bot", text:intro }]);
-    setHistory(p => [...p, { role:"assistant", content:intro }]);
-  };
+  const send=()=>{if(!input.trim()||busy)return;const t=input.trim();setInput("");const nm=[...msgs,{role:"user",text:t}];setMsgs(nm);go(nm);};
 
-  // Render helpers
-  const renderText = (text) => {
-    return text.split(/(\*\*.*?\*\*)/).map((p,j) =>
-      p.startsWith("**") && p.endsWith("**")
-        ? <strong key={j} style={{ color:C.white, fontWeight:600 }}>{p.slice(2,-2)}</strong>
-        : <span key={j}>{p}</span>
-    );
-  };
-
-  return (
-    <div style={{ background:C.bg, height:"100dvh", display:"flex", flexDirection:"column", fontFamily:"-apple-system,'SF Pro Text','Segoe UI',sans-serif", color:C.text, maxWidth:500, margin:"0 auto" }}>
-
-      {/* Header */}
-      <div style={{ padding:"12px 16px", background:C.chatBg, borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
-        <div style={{ width:36, height:36, borderRadius:10, background:`linear-gradient(135deg,${C.accent},#1d4ed8)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17 }}>🏁</div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:15, fontWeight:600, color:C.white }}>Race Mode Engine</div>
-          <div style={{ fontSize:11, color:C.textDim }}>{profile.name ? `${profile.name}${profile.car ? ` · ${profile.car}` : ""}` : "Let's get started"}</div>
-        </div>
-        {profile.name && (
-          <div style={{ width:32, height:32, borderRadius:"50%", background:"#3b82f620", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:C.accent, fontWeight:700 }}>
-            {profile.name[0].toUpperCase()}
-          </div>
-        )}
+  return(
+    <div style={{background:C.bg,height:"100dvh",display:"flex",flexDirection:"column",fontFamily:"-apple-system,'SF Pro Text','Segoe UI',system-ui,sans-serif",color:C.text,maxWidth:500,margin:"0 auto"}}>
+      <div style={{padding:"12px 16px",background:C.chatBg,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.accent},#1d4ed8)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}}>🏁</div>
+        <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:C.white}}>Race Mode</div><div style={{fontSize:11,color:C.textDim}}>{prof?.name?`${prof.name} · ${prof.car||"B7"}`:"Your AI Pit Crew Chief"}</div></div>
+        {prof?.name&&<div style={{width:32,height:32,borderRadius:"50%",background:`${C.accent}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.accent,fontWeight:700}}>{prof.name[0].toUpperCase()}</div>}
       </div>
 
-      {/* Mode bar */}
-      {showModes && <ModeBar mode={mode} setMode={setMode} onSwitch={switchMode} />}
-
-      {/* Messages */}
-      <div style={{ flex:1, overflowY:"auto", padding:"14px 14px 8px", display:"flex", flexDirection:"column", gap:3 }}>
-        {msgs.map((m,i) => (
-          <div key={i} style={{ display:"flex", justifyContent: m.role==="user" ? "flex-end":"flex-start", marginBottom:3 }}>
-            <div style={{
-              maxWidth:"88%", padding:"10px 14px",
-              borderRadius: m.role==="user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-              background: m.role==="user" ? C.userBubble : C.botBubble,
-              border: m.role==="bot" ? `1px solid ${C.botBorder}` : "none",
-              fontSize:14, lineHeight:1.55, color:C.text, whiteSpace:"pre-wrap", wordBreak:"break-word",
-            }}>
-              {renderText(m.text)}
-            </div>
-          </div>
-        ))}
-        {typing && (
-          <div style={{ display:"flex", justifyContent:"flex-start", marginBottom:3 }}>
-            <div style={{ padding:"10px 16px", borderRadius:"16px 16px 16px 4px", background:C.botBubble, border:`1px solid ${C.botBorder}` }}><Dots /></div>
-          </div>
-        )}
-        <div ref={endRef}/>
-      </div>
-
-      {/* Input */}
-      <div style={{ padding:"10px 14px", borderTop:`1px solid ${C.border}`, background:C.chatBg, flexShrink:0 }}>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <input value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); send(); }}}
-            placeholder={mode==="onboarding" ? "Type here..." : mode==="coach" ? "What's the car doing?" : mode==="manual" ? 'Ask "What is anti-squat?"...' : "Type here..."}
-            disabled={typing}
-            style={{ flex:1, padding:"12px 16px", background:C.inputBg, border:`1px solid ${C.inputBorder}`, borderRadius:24, color:C.text, fontSize:14, fontFamily:"inherit", outline:"none", opacity:typing?0.5:1 }}
-            onFocus={e => { e.target.style.borderColor=C.accent; }}
-            onBlur={e => { e.target.style.borderColor=C.inputBorder; }}
-          />
-          <button onClick={send} disabled={!input.trim()||typing}
-            style={{ width:42, height:42, borderRadius:"50%", background: input.trim()&&!typing ? C.accent : C.inputBg, border:`1px solid ${input.trim()&&!typing ? C.accent : C.inputBorder}`, color:C.white, fontSize:18, cursor: input.trim()&&!typing ? "pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>↑</button>
+      {tab==="chat"?(<div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"14px 14px 8px",display:"flex",flexDirection:"column",gap:6}}>
+          {msgs.map((m,i)=>(<div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}><div style={{maxWidth:"88%",padding:"10px 14px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?C.userBubble:C.botBubble,border:`1px solid ${m.role==="user"?"transparent":C.botBorder}`,fontSize:14,lineHeight:1.55,color:C.text,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{m.text.split(/(\*\*.*?\*\*)/).map((p,j)=>p.startsWith("**")&&p.endsWith("**")?<strong key={j} style={{color:C.white,fontWeight:600}}>{p.slice(2,-2)}</strong>:<span key={j}>{p}</span>)}</div></div>))}
+          {busy&&<div style={{display:"flex"}}><div style={{padding:"10px 16px",borderRadius:"16px 16px 16px 4px",background:C.botBubble,border:`1px solid ${C.botBorder}`}}><Dots/></div></div>}
+          <div ref={end}/>
         </div>
+        <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,background:C.chatBg,flexShrink:0}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey)send();}} placeholder={busy?"Thinking...":"Message your pit crew chief..."} disabled={busy} style={{flex:1,padding:"11px 16px",background:C.inputBg,border:`1px solid ${C.inputBorder}`,borderRadius:24,color:C.text,fontSize:14,fontFamily:"inherit",outline:"none",opacity:busy?.5:1}} onFocus={e=>{e.target.style.borderColor=C.accent;}} onBlur={e=>{e.target.style.borderColor=C.inputBorder;}}/>
+            <button onClick={send} disabled={!input.trim()||busy} style={{width:40,height:40,borderRadius:"50%",background:input.trim()&&!busy?C.accent:C.inputBg,border:`1px solid ${input.trim()&&!busy?C.accent:C.inputBorder}`,color:C.white,fontSize:17,cursor:input.trim()&&!busy?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
+          </div>
+        </div>
+      </div>):tab==="setup"?(<div style={{flex:1,overflowY:"auto",padding:14}}>
+        <div style={{fontSize:14,fontWeight:600,color:C.white,marginBottom:10}}>{prof?.name?`${prof.name}'s`:"My"} Setup</div>
+        {setup?<SetupView setup={setup}/>:<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>No setup yet. Chat with the coach to get started.</div>}
+      </div>):tab==="log"?(<div style={{flex:1,overflowY:"auto",padding:14}}>
+        <div style={{fontSize:14,fontWeight:600,color:C.white,marginBottom:10}}>Session Log</div>
+        {sessions.length?sessions.map((s,i)=>(<div key={i} style={{padding:12,background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:10,marginBottom:6}}><div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{s.date}</div><div style={{fontSize:13,color:C.text}}>{s.notes}</div></div>)):<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>No sessions yet.</div>}
+      </div>):(<div style={{flex:1,overflowY:"auto",padding:14}}>
+        <div style={{fontSize:14,fontWeight:600,color:C.white,marginBottom:10}}>Driver Profile</div>
+        {prof?<div style={{display:"flex",flexDirection:"column",gap:6}}>{[["Name",prof.name],["Car",prof.car],["Track",prof.track],["Experience",prof.experience],["Class",prof.racingClass],["Goals",prof.goals]].filter(([,v])=>v).map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:8}}><span style={{fontSize:12,color:C.textMuted}}>{l}</span><span style={{fontSize:12,color:C.white,fontWeight:500}}>{v}</span></div>))}</div>:<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>Chat with the coach to build your profile.</div>}
+      </div>)}
+
+      <div style={{display:"flex",borderTop:`1px solid ${C.navBorder}`,background:C.navBg,flexShrink:0}}>
+        {[{id:"chat",label:"Coach",d:"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"},{id:"setup",label:"Setup",d:"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"},{id:"log",label:"Log",d:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"},{id:"profile",label:"Profile",d:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"}].map(n=>(<button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"8px 0 6px",background:"transparent",border:"none",cursor:"pointer",color:tab===n.id?C.navActive:C.textMuted,fontSize:10,fontFamily:"inherit"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={n.d}/></svg>{n.label}</button>))}
       </div>
     </div>
   );
 }
-
