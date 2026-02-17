@@ -141,7 +141,7 @@ export default function App(){
       if(logs.length)setSessions(p=>[...p,...logs.map(l=>({date:new Date().toLocaleDateString(),notes:l}))]);
       if(init)setMsgs([{role:"bot",text:c}]);else setMsgs(p=>[...p,{role:"bot",text:c}]);
     }catch(e){
-      const err="Connection issue. Check internet and try again.";
+      const err="Error: " + (e.message || "Connection issue. Check internet and try again.");
       if(init)setMsgs([{role:"bot",text:err}]);else setMsgs(p=>[...p,{role:"bot",text:err}]);
     }
     setBusy(false);
