@@ -80,13 +80,14 @@ Always include tags when conversation reveals new info.`;
 }
 
 async function ask(msgs, sys) {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await fetch("/api/chat", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: sys,
+    body: JSON.stringify({ system: sys,
       messages: msgs.map(m => ({ role: m.role === "bot" ? "assistant" : "user", content: m.text }))
     })
   });
   const d = await r.json();
+  if (d.error) throw new Error(d.error);
   return d.content?.map(c => c.text || "").join("\n") || "Something went wrong.";
 }
 
