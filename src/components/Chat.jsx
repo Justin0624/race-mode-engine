@@ -395,9 +395,9 @@ function SetupViewer({ setup, diffs }) {
 }
 
 // ── Main ──
-export default function RaceModeKB({ userName, avatarUrl, isLoggedIn, onProfileClick, onLoginClick } = {}) {
+export default function RaceModeKB() {
   const [msgs,setMsgs]=useState([]);
-  const [phase,setPhase]=useState("init");
+  const [phase,setPhase]=useState("welcome");
   const [input,setInput]=useState("");
   const [typing,setTyping]=useState(false);
   const [qr,setQr]=useState([]);
@@ -405,13 +405,14 @@ export default function RaceModeKB({ userName, avatarUrl, isLoggedIn, onProfileC
   const [diffs,setDiffs]=useState([]);
   const [cond,setCond]=useState({});
   const [prevPhase,setPrevPhase]=useState(null);
+  const [profile,setProfile]=useState({name:"",car:"",track:"",experience:"",struggle:"",racingClass:""});
   const endRef=useRef(null);
 
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"})},[msgs,typing]);
   useEffect(()=>{
     setTimeout(()=>bot(
-      "Hey! 🏁 I'm your Race Mode Coach.\n\nI can **build your setup**, **coach you at the track**, and **teach you about any RC concept**.\n\n💡 Ask me **\"What is anti-squat?\"** or **\"What does caster do?\"** anytime — even mid-coaching — and I'll explain it with how it applies to your car.\n\nWhat do you want to do?",
-      ["Build my B7 setup","Explore concepts","Let's go racing"]
+      "Hey! 🏁 Welcome to **Race Mode**.\n\nI'm your AI pit crew chief — I'll help you build setups, learn what every setting does, and coach you through race nights without spiraling.\n\nLet's get to know each other so I can help you the right way.\n\n**What's your name?**",
+      []
     ),500);
   },[]);
 
@@ -465,6 +466,93 @@ export default function RaceModeKB({ userName, avatarUrl, isLoggedIn, onProfileC
     // ── Resume after knowledge ──
     if(lo==="back to coaching"){ setPhase("racing"); setTimeout(()=>bot("Back to it. What's the car doing?",SYMPTOMS),300); return; }
     if(lo==="continue building"){ setPhase("building"); setTimeout(()=>bot("Where were we — what else is different from kit?"),300); return; }
+
+    // ── WELCOME: Get name ──
+    if(phase==="welcome"){
+      const name=reply.trim().split(" ")[0]; // First name
+      const capName=name.charAt(0).toUpperCase()+name.slice(1);
+      setProfile(p=>({...p,name:capName}));
+      setTimeout(()=>bot(`Hey ${capName}! 👊 Good to meet you.\n\n**What car are you running?**`,
+        ["RC10B7","RC10B84","RC10T7","Not sure yet"]),300);
+      setPhase("ob_car");
+      return;
+    }
+
+    // ── ONBOARD: Car ──
+    if(phase==="ob_car"){
+      const car=reply.includes("B7")?"RC10B7":reply.includes("B84")?"RC10B84":reply.includes("T7")?"RC10T7":"RC10B7";
+      setProfile(p=>({...p,car}));
+      if(car!=="RC10B7"){
+        setTimeout(()=>bot(`${car} support is coming soon! For now I'll set you up with the **B7** — the fundamentals transfer directly.\n\n**Where's your home track?**`,
+          ["Beaver RC","Ed's Hobby Shop","Somewhere else","I don't have a home track"]),300);
+      } else {
+        setTimeout(()=>bot(`B7 — great car. I know it inside and out.\n\n**Where's your home track?**`,
+          ["Beaver RC","Ed's Hobby Shop","Somewhere else","I don't have a home track"]),300);
+      }
+      setPhase("ob_track");
+      return;
+    }
+
+    // ── ONBOARD: Track ──
+    if(phase==="ob_track"){
+      const trackMap={"Beaver RC":"Beaver RC","Ed's Hobby Shop":"Ed's Hobby Shop"};
+      const track=trackMap[reply]||reply;
+      setProfile(p=>({...p,track}));
+      const trackNote=track==="Beaver RC"?" Old grey Ozite, low-medium grip — I know it well.":
+        track==="Ed's Hobby Shop"?" Black CRC carpet, hooks up nice.":"";
+      setTimeout(()=>bot(`${track}.${trackNote}\n\n**How would you describe your experience with setup?**`,
+        ["Brand new — never touched a setup","I know the basics","Pretty comfortable — I tune my own car","Advanced — I understand the theory"]),300);
+      setPhase("ob_experience");
+      return;
+    }
+
+    // ── ONBOARD: Experience ──
+    if(phase==="ob_experience"){
+      const expMap={
+        "Brand new":"beginner","I know the basics":"intermediate",
+        "Pretty comfortable":"experienced","Advanced":"advanced"
+      };
+      const exp=expMap[reply]||"intermediate";
+      setProfile(p=>({...p,experience:exp}));
+      const expResponse={
+        beginner:"No worries — I'll explain everything as we go. No question is dumb, and I'll never assume you know something you don't.",
+        intermediate:"Got it — I'll explain the \"why\" behind each change but won't bore you with the absolute basics.",
+        experienced:"Nice — I'll give you the technical detail and trust your judgment. I'll still explain my reasoning so you can push back.",
+        advanced:"Respect. I'll keep it technical and get straight to the point. You tell me what the car is doing, I'll tell you what I'd change and why.",
+      };
+      setTimeout(()=>bot(`${expResponse[exp]}\n\n**What's your biggest struggle on race night?**`,
+        ["I change too much and make it worse","I don't know what to change","I can't figure out what the car is doing","I'm fast in practice but slow in races","I'm just getting started"]),300);
+      setPhase("ob_struggle");
+      return;
+    }
+
+    // ── ONBOARD: Struggle ──
+    if(phase==="ob_struggle"){
+      setProfile(p=>({...p,struggle:reply}));
+      const struggleResponse={
+        "I change too much and make it worse":"That's literally why I exist. One change at a time, test it, log it. If it's worse, we roll back. No spiraling.",
+        "I don't know what to change":"That's what I'm here for. Tell me what the car is doing, I'll tell you the one thing to try. You don't need to know the theory — just what the car feels like.",
+        "I can't figure out what the car is doing":"We'll work on that together. I'll ask you specific questions — like \"is it the entry or the exit?\" — to narrow it down. It gets easier fast.",
+        "I'm fast in practice but slow in races":"Classic. That's usually about consistency, not speed. We'll focus on a setup that's forgiving under pressure so your pace holds up when it counts.",
+        "I'm just getting started":"Welcome to the best hobby in the world. I'll walk you through everything — what each setting does, why you'd change it, and how to tell if it helped.",
+      };
+      const resp=struggleResponse[reply]||"I hear you. We'll work on that together.";
+      setTimeout(()=>bot(`${resp}\n\n**What class do you race?**`,
+        ["17.5T Stock","13.5T Modified","21.5T Spec","Other","Not sure"]),300);
+      setPhase("ob_class");
+      return;
+    }
+
+    // ── ONBOARD: Class ──
+    if(phase==="ob_class"){
+      setProfile(p=>({...p,racingClass:reply}));
+      const p=profile;
+      setTimeout(()=>bot(
+        `**You're all set, ${p.name}!** 🏁\n\nHere's what I know:\n• **Car:** ${p.car}\n• **Home track:** ${p.track}\n• **Experience:** ${p.experience}\n• **Focus:** ${p.struggle}\n• **Class:** ${reply}\n\nI'll use all of this to give you the best advice I can. Everything is tailored to you.\n\n💡 You can ask me **\"What is [concept]?\"** anytime to learn about any setup topic.\n\nWhat do you want to do first?`,
+        ["Build my setup","Explore concepts","Let's go racing"]),300);
+      setPhase("init");
+      return;
+    }
 
     // ── INIT ──
     if(phase==="init"){
@@ -728,17 +816,11 @@ export default function RaceModeKB({ userName, avatarUrl, isLoggedIn, onProfileC
         <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.accent},#1d4ed8)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}}>🏁</div>
         <div style={{flex:1}}>
           <div style={{fontSize:15,fontWeight:600,color:C.white}}>Race Mode Coach</div>
-          <div style={{fontSize:11,color:C.textDim}}>{userName ? `Hey ${userName}` : 'B7 · Ask me anything'}</div>
+          <div style={{fontSize:11,color:C.textDim}}>{profile.name ? `${profile.name} · ${profile.car||'B7'}` : 'Let\'s get started'}</div>
         </div>
         {diffs.length>0&&<div style={{background:`${C.delta}15`,border:`1px solid ${C.delta}35`,borderRadius:20,padding:"3px 10px",fontSize:11,color:C.delta,fontWeight:600}}>{diffs.length}Δ</div>}
         {phase==="racing"&&<div style={{background:C.greenSoft,border:`1px solid ${C.green}30`,borderRadius:20,padding:"3px 10px",fontSize:11,color:C.green}}>● Live</div>}
-        {avatarUrl ? (
-          <img src={avatarUrl} alt="" onClick={onProfileClick} style={{width:32,height:32,borderRadius:"50%",cursor:"pointer"}} />
-        ) : isLoggedIn ? (
-          <div onClick={onProfileClick} style={{width:32,height:32,borderRadius:"50%",background:"#3b82f620",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:C.accent,fontWeight:700,cursor:"pointer"}}>{(userName||"R")[0].toUpperCase()}</div>
-        ) : onLoginClick ? (
-          <div onClick={onLoginClick} style={{fontSize:11,color:C.accent,cursor:"pointer"}}>Sign in</div>
-        ) : null}
+        {profile.name&&<div style={{width:32,height:32,borderRadius:"50%",background:"#3b82f620",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.accent,fontWeight:700}}>{profile.name[0].toUpperCase()}</div>}
       </div>
 
       {/* Messages */}
@@ -797,7 +879,7 @@ export default function RaceModeKB({ userName, avatarUrl, isLoggedIn, onProfileC
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <input value={input} onChange={e=>setInput(e.target.value)}
             onKeyDown={e=>{if(e.key==="Enter")handleSend();}}
-            placeholder='Ask "What is anti-squat?" or tell me what the car is doing...'
+            placeholder={phase==="welcome"?"Type your name...":phase.startsWith("ob_")?"Type your answer...":"Ask anything or tell me what the car is doing..."}
             style={{flex:1,padding:"11px 16px",background:C.inputBg,border:`1px solid ${C.inputBorder}`,borderRadius:24,color:C.text,fontSize:14,fontFamily:"inherit",outline:"none"}}
             onFocus={e=>{e.target.style.borderColor=C.accent;}}
             onBlur={e=>{e.target.style.borderColor=C.inputBorder;}}
