@@ -16,6 +16,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No messages provided' });
     }
 
+    const body = {
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1000,
+      system: (system || '').slice(0, 15000),
+      messages,
+    };
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -23,12 +30,7 @@ export default async function handler(req, res) {
         'x-api-key': key,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: system || '',
-        messages,
-      }),
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();
