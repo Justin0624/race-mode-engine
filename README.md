@@ -113,22 +113,25 @@ race-mode-engine/
 - B7 kit baseline (verified)
 - Spiral prevention
 
-### Phase 2: Auth & Persistence
-- User accounts (Google/Apple/FB)
-- Save/load setups
-- Session history
-- PDF setup sheet upload & parsing
+### Phase 2: Smart Features
+- User accounts (Google/Apple/FB login)
+- Save/load setups across sessions
+- Session history with change tracking
+- On-demand PDF import (fetch manufacturer kit setup sheets automatically when user registers a new car)
+- Photo-based setup identification (take a photo → AI identifies parts with confidence levels → user confirms)
+- Cross-platform setup translation (TLR ↔ Associated ↔ Yokomo ↔ etc)
 
 ### Phase 3: Track Intelligence
 - Track profiles (surface, grip, conditions)
-- Aggregate anonymous session data
-- Pattern recognition ("at this track, racers end up around 50k diff")
+- Aggregate anonymous session data across users
+- Pattern recognition ("at this track, fast cars are running 50k+ diff regardless of brand")
 - PetitRC setup database integration
 
-### Phase 4: Multi-Car Support
-- B84 (4WD buggy)
-- T7 (stadium truck)
-- Car-specific knowledge & recommendations
+### Phase 4: Multi-Car & Community
+- Full support for TLR, Yokomo, Schumacher, XRAY, Kyosho
+- Cross-platform coaching ("your buddy's TLR setup translates to this on your B7")
+- Community setup sharing (opt-in)
+- Track leaderboard data
 
 ## Contributing
 
