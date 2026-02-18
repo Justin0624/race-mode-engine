@@ -100,7 +100,7 @@ async function ask(msgs, sys) {
     })
   });
   const d = await r.json();
-  if (d.error) throw new Error(d.error);
+  if (d.error) throw new Error(JSON.stringify(d));
   return d.content?.map(c => c.text || "").join("\n") || "Something went wrong.";
 }
 
