@@ -39,10 +39,29 @@ const LBL = {
   front_wheel_hex:"Front Hex",rear_wheel_hex:"Rear Hex",
 };
 
-function buildSys(prof, setup, sessions) {
+function buildSys(prof, setup, sessions, allTrackSetups) {
   const sStr = setup ? Object.entries(setup).filter(([,v])=>v&&v!=="unknown").map(([k,v])=>`${LBL[k]||k}: ${v}${B7_KIT[k]&&v!==B7_KIT[k]?` (kit: ${B7_KIT[k]})`:""}`).join("\n") : "No setup loaded.";
-  const pStr = prof ? `Name: ${prof.name||"?"}, Car: ${prof.car||"?"}, Track: ${prof.track||"?"}, Experience: ${prof.experience||"?"}, Goals: ${prof.goals||"?"}, Class: ${prof.racingClass||"?"}, Setup source: ${prof.setupSource||"?"}` : "No profile — first-time user.";
-  const hStr = sessions?.length ? sessions.slice(-5).map(s=>`[${s.date}] ${s.notes}`).join("\n") : "None.";
+  const pStr = prof ? `Name: ${prof.name||"?"}, Car: ${prof.car||"?"}, Location: ${prof.location||"?"}, Track: ${prof.track||"?"}, Experience: ${prof.experience||"?"}, Goals: ${prof.goals||"?"}, Class: ${prof.racingClass||"?"}, Setup source: ${prof.setupSource||"?"}` : "No profile — first-time user.";
+  
+  // Build rich session history
+  let hStr = "None yet.";
+  if(sessions?.length){
+    hStr = sessions.slice(-10).map(s=>{
+      let entry = `[${s.date}]`;
+      if(s.track) entry += ` at ${s.track}`;
+      if(s.notes) entry += ` — ${s.notes}`;
+      if(s.changes && s.changes.length) entry += ` | Changes: ${JSON.stringify(s.changes)}`;
+      if(s.starting_setup && s.ending_setup) entry += ` | Setup went from ${JSON.stringify(s.starting_setup)} to ${JSON.stringify(s.ending_setup)}`;
+      return entry;
+    }).join("\n");
+  }
+
+  // Build track intelligence from other drivers (future)
+  let trackStr = "No other driver data available yet.";
+  if(allTrackSetups?.length){
+    trackStr = `${allTrackSetups.length} setups from other drivers at this track:\n` + 
+      allTrackSetups.map(s=>`- ${s.brand} ${s.model}: ${JSON.stringify(s.setup)}`).join("\n");
+  }
 
   return `You are Race Mode Engine, an AI pit crew chief for 1/10 scale RC racing. You are an expert on all major platforms: Team Associated (B7, B84, T7), TLR (22X-4, 22 5.0), Yokomo (YZ-2 DTM, CAL), Schumacher, XRAY, Kyosho, and others.
 
@@ -81,7 +100,24 @@ ROLES:
 DRIVER: ${pStr}
 SETUP: ${sStr}
 KIT BASELINE: ${Object.entries(B7_KIT).map(([k,v])=>`${LBL[k]||k}: ${v}`).join(", ")}
-SESSIONS: ${hStr}
+
+SESSION HISTORY (USE THIS — this is what the driver has tried before):
+${hStr}
+INSTRUCTIONS FOR SESSION HISTORY:
+- If the driver reports a problem they've had before, check session history FIRST
+- If a change was already tried and made things worse, DO NOT suggest it again
+- If a change worked well in the past, reference it: "Last time you went to 50k diff and it helped"
+- Look for PATTERNS: if the driver keeps changing the same setting back and forth, point it out
+- Track which direction the setup is moving over time — are they trending softer? stiffer?
+
+TRACK INTELLIGENCE (setups from other drivers at the same track):
+${trackStr}
+INSTRUCTIONS FOR TRACK INTELLIGENCE:
+- If multiple drivers at the same track converge on similar settings, that's a strong signal
+- Present patterns as evidence, not commands: "3 out of 5 drivers at Beaver run 50k+ diff"
+- Universal settings carry more weight (oils, diff fluid, ride height)
+- Brand-specific settings need translation before comparing
+- Never copy another driver's setup blindly — use patterns to inform direction
 
 FIRST-TIME ONBOARDING:
 If no profile exists, you MUST build one step by step. This is NOT casual conversation — it's structured profile creation. The user needs to complete this before coaching begins.
@@ -218,7 +254,15 @@ export default function App(){
   const go=async(h,init=false)=>{
     setBusy(true);
     try{
-      const raw=await ask(h,buildSys(prof,setup,sessions));
+      // Fetch track intelligence — other drivers' setups at the same track
+      let trackSetups=null;
+      if(prof?.track&&profileId){
+        try{
+          const allCars=await db.getTrackSetups(prof.track,profileId);
+          if(allCars&&allCars.length)trackSetups=allCars;
+        }catch(e){}
+      }
+      const raw=await ask(h,buildSys(prof,setup,sessions,trackSetups));
       const{c,pu,su,logs}=parse(raw);
       
       // Handle profile updates
@@ -249,7 +293,16 @@ export default function App(){
         setSetup(newSetup);
       }
       
-      if(logs.length)setSessions(p=>[...p,...logs.map(l=>({date:new Date().toLocaleDateString(),notes:l}))]);
+      if(logs.length){
+        const newSessions=logs.map(l=>({date:new Date().toLocaleDateString(),notes:l,track:prof?.track||""}));
+        setSessions(p=>[...p,...newSessions]);
+        // Save to database
+        if(profileId&&carId){
+          for(const l of logs){
+            try{await db.createSession({profile_id:profileId,car_id:carId,track:prof?.track||"unknown",notes:l,starting_setup:setup||{},ending_setup:{...(setup||{}),...su},changes:Object.entries(su).map(([k,v])=>({setting:k,from:setup?.[k]||"unknown",to:v}))});}catch(e){}
+          }
+        }
+      }
       if(init)setMsgs([{role:"bot",text:c}]);else setMsgs(p=>[...p,{role:"bot",text:c}]);
     }catch(e){
       const err="Error: " + (e.message || "Connection issue. Check internet and try again.");

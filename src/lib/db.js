@@ -89,6 +89,23 @@ export const db = {
     return await r.json();
   },
 
+  // ── Track Intelligence ──
+  async getTrackSetups(trackName, excludeProfileId) {
+    // Get all cars from profiles that race at this track (excluding current user)
+    try {
+      // First get profiles at this track
+      const pr = await fetch(url('profiles', `home_track=eq.${encodeURIComponent(trackName)}&id=neq.${excludeProfileId}&select=id`), { headers: headers() });
+      const profiles = await pr.json();
+      if (!profiles.length) return [];
+      
+      const ids = profiles.map(p => p.id);
+      const cr = await fetch(url('cars', `profile_id=in.(${ids.join(',')})&select=brand,model,setup&is_active=eq.true`), { headers: headers() });
+      return await cr.json();
+    } catch (e) {
+      return [];
+    }
+  },
+
   // ── Conversations ──
   async saveConversation(profileId, messages, summary = '') {
     // Check if conversation exists for this profile
