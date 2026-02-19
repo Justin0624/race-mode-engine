@@ -343,9 +343,41 @@ export default function App(){
         if(prof)await db.updateProfile(profileId,{name:prof.name,location:prof.location,home_track:prof.track,experience:prof.experience,goals:prof.goals,racing_class:prof.racingClass});
         if(setup&&carId)await db.updateCar(carId,{setup});
         if(msgs.length)await db.saveConversation(profileId,msgs);
+        console.log("[RaceMode] Saved to database");
       }catch(e){console.warn("DB save failed:",e);}
     },2000);
   },[prof,setup,msgs,sessions]);
+
+  // Auto-sync: if we have profile data but no DB record, keep trying every 30s
+  useEffect(()=>{
+    if(profileId||loading)return; // Already synced or still loading
+    const syncInterval=setInterval(async()=>{
+      const lsProf=localStorage.getItem('race_mode_profile');
+      if(!lsProf)return;
+      const p=JSON.parse(lsProf);
+      if(!p||(!p.name&&!p.car&&!p.track))return;
+      console.log("[RaceMode] Auto-sync attempt — pushing to database...");
+      try{
+        const created=await db.createProfile({name:p.name||null,location:p.location||null,home_track:p.track||null,experience:p.experience||null,goals:p.goals||null,racing_class:p.racingClass||null});
+        if(created){
+          setProfileId(created.id);
+          setDeviceProfileId(created.id);
+          if(p.car){
+            const brand=p.car.includes("TLR")||p.car.includes("22")?"TLR":p.car.includes("Yokomo")||p.car.includes("YZ")?"Yokomo":"Team Associated";
+            const lsSetup=localStorage.getItem('race_mode_setup');
+            const parsedSetup=lsSetup?JSON.parse(lsSetup):null;
+            const car=await db.createCar({profile_id:created.id,brand,model:p.car,setup:parsedSetup||{...B7_KIT},kit_baseline:{...B7_KIT},setup_source:p.setupSource||"kit"});
+            if(car)setCarId(car.id);
+          }
+          const lsMsgs=localStorage.getItem('race_mode_msgs');
+          if(lsMsgs){const parsedMsgs=JSON.parse(lsMsgs);if(parsedMsgs.length)await db.saveConversation(created.id,parsedMsgs);}
+          console.log("[RaceMode] Auto-sync complete! Profile saved to database.");
+          clearInterval(syncInterval);
+        }
+      }catch(e){console.warn("[RaceMode] Auto-sync failed, will retry:",e);}
+    },30000);
+    return()=>clearInterval(syncInterval);
+  },[profileId,loading]);
 
   const go=async(h,init=false)=>{
     setBusy(true);
