@@ -307,12 +307,56 @@ export default function App(){
                   const car=await db.createCar({profile_id:created.id,brand,model:parsedProf.car,setup:parsedSetup||{...B7_KIT},kit_baseline:{...B7_KIT},setup_source:parsedProf.setupSource||"kit"});
                   if(car)setCarId(car.id);
                 }
-                // Save conversation too
                 const parsedMsgs=lsMsgs?JSON.parse(lsMsgs):null;
                 if(parsedMsgs&&parsedMsgs.length)await db.saveConversation(created.id,parsedMsgs);
                 console.log("[RaceMode] Full sync to database complete!");
               }
             }catch(e){console.warn("[RaceMode] DB sync failed:",e);}
+          } else if(lsMsgs){
+            // Profile is empty but we have messages — ask AI to extract profile from conversation
+            console.log("[RaceMode] Profile empty but messages exist — extracting profile from conversation...");
+            try{
+              const parsedMsgs=JSON.parse(lsMsgs);
+              if(parsedMsgs.length>3){
+                const extractSys=`Extract profile information from this conversation. Return ONLY tags, nothing else. Use these tags for any info you find:
+[PROFILE:name=value]
+[PROFILE:location=value]
+[PROFILE:track=value]
+[PROFILE:car=value]
+[PROFILE:experience=value]
+[PROFILE:goals=value]
+[PROFILE:racingClass=value]
+[PROFILE:setupSource=value]
+If you cannot find a piece of info, skip that tag. Return ONLY the tags, no other text.`;
+                const r=await fetch("/api/chat",{
+                  method:"POST",headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify({system:extractSys,messages:parsedMsgs.slice(-20).map(m=>({role:m.role==="bot"?"assistant":"user",content:m.text}))})
+                });
+                const d=await r.json();
+                const raw=d.content?.map(c=>c.text||"").join("\n")||"";
+                console.log("[RaceMode] AI extraction result:",raw);
+                const extracted={};
+                for(const m of raw.matchAll(/\[PROFILE:(\w+)=(.+?)\]/g)){extracted[m[1]]=m[2];}
+                if(Object.keys(extracted).length){
+                  console.log("[RaceMode] Extracted profile:",extracted);
+                  setProf(extracted);
+                  localStorage.setItem('race_mode_profile',JSON.stringify(extracted));
+                  // Now save to DB
+                  const created=await db.createProfile({name:extracted.name||null,location:extracted.location||null,home_track:extracted.track||null,experience:extracted.experience||null,goals:extracted.goals||null,racing_class:extracted.racingClass||null});
+                  if(created){
+                    setProfileId(created.id);
+                    setDeviceProfileId(created.id);
+                    if(extracted.car){
+                      const brand=extracted.car.includes("TLR")||extracted.car.includes("22")?"TLR":extracted.car.includes("Yokomo")||extracted.car.includes("YZ")?"Yokomo":"Team Associated";
+                      const car=await db.createCar({profile_id:created.id,brand,model:extracted.car,setup:parsedSetup||{...B7_KIT},kit_baseline:{...B7_KIT},setup_source:extracted.setupSource||"kit"});
+                      if(car)setCarId(car.id);
+                    }
+                    await db.saveConversation(created.id,parsedMsgs);
+                    console.log("[RaceMode] Profile extracted and saved to database!");
+                  }
+                }
+              }
+            }catch(e){console.warn("[RaceMode] Extraction failed:",e);}
           }
           
           setLoading(false);
