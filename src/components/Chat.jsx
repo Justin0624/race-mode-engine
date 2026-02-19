@@ -215,6 +215,7 @@ export default function App(){
   const[reportBusy,setReportBusy]=useState(false);
   const end=useRef(null);
   const saveTimer=useRef(null);
+  const inputRef=useRef(null);
 
   useEffect(()=>{end.current?.scrollIntoView({behavior:"smooth"});},[msgs,busy]);
 
@@ -324,6 +325,7 @@ export default function App(){
       if(init)setMsgs([{role:"bot",text:err}]);else setMsgs(p=>[...p,{role:"bot",text:err}]);
     }
     setBusy(false);
+    setTimeout(()=>inputRef.current?.focus(),100);
   };
 
   const send=()=>{if(!input.trim()||busy)return;const t=input.trim();setInput("");const nm=[...msgs,{role:"user",text:t}];setMsgs(nm);go(nm);};
@@ -428,7 +430,7 @@ Current setup highlights: ${setup?Object.entries(setup).filter(([k,v])=>v&&v!==B
         </div>
         <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,background:C.chatBg,flexShrink:0}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey)send();}} placeholder={busy?"Thinking...":"Message your pit crew chief..."} disabled={busy} style={{flex:1,padding:"11px 16px",background:C.inputBg,border:`1px solid ${C.inputBorder}`,borderRadius:24,color:C.text,fontSize:14,fontFamily:"inherit",outline:"none",opacity:busy?.5:1}} onFocus={e=>{e.target.style.borderColor=C.accent;}} onBlur={e=>{e.target.style.borderColor=C.inputBorder;}}/>
+            <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey)send();}} placeholder={busy?"Thinking...":"Message your pit crew chief..."} disabled={busy} style={{flex:1,padding:"11px 16px",background:C.inputBg,border:`1px solid ${C.inputBorder}`,borderRadius:24,color:C.text,fontSize:14,fontFamily:"inherit",outline:"none",opacity:busy?.5:1}} onFocus={e=>{e.target.style.borderColor=C.accent;}} onBlur={e=>{e.target.style.borderColor=C.inputBorder;}}/>
             <button onClick={send} disabled={!input.trim()||busy} style={{width:40,height:40,borderRadius:"50%",background:input.trim()&&!busy?C.accent:C.inputBg,border:`1px solid ${input.trim()&&!busy?C.accent:C.inputBorder}`,color:C.white,fontSize:17,cursor:input.trim()&&!busy?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
           </div>
         </div>
