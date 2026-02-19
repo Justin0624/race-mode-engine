@@ -322,10 +322,13 @@ export default function App(){
       if(Object.keys(pu).length){
         const newProf={...(prof||{}),...pu};
         setProf(newProf);
+        console.log("[RaceMode] Profile update detected:", pu);
         // Create profile in DB if first time
-        if(!profileId&&(pu.name||pu.car)){
+        if(!profileId){
           try{
-            const created=await db.createProfile({name:newProf.name,location:newProf.location,home_track:newProf.track,experience:newProf.experience,goals:newProf.goals,racing_class:newProf.racingClass});
+            console.log("[RaceMode] Creating new profile in DB...");
+            const created=await db.createProfile({name:newProf.name||null,location:newProf.location||null,home_track:newProf.track||null,experience:newProf.experience||null,goals:newProf.goals||null,racing_class:newProf.racingClass||null});
+            console.log("[RaceMode] DB create result:", created);
             if(created){
               setProfileId(created.id);
               setDeviceProfileId(created.id);
@@ -333,10 +336,11 @@ export default function App(){
               if(newProf.car){
                 const brand=newProf.car.includes("TLR")||newProf.car.includes("22")?"TLR":newProf.car.includes("Yokomo")||newProf.car.includes("YZ")?"Yokomo":"Team Associated";
                 const car=await db.createCar({profile_id:created.id,brand,model:newProf.car,setup:{...B7_KIT},kit_baseline:{...B7_KIT},setup_source:newProf.setupSource||"kit"});
+                console.log("[RaceMode] Car create result:", car);
                 if(car)setCarId(car.id);
               }
             }
-          }catch(e){console.warn("DB create failed:",e);}
+          }catch(e){console.warn("[RaceMode] DB create FAILED:",e);}
         }
       }
       

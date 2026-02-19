@@ -4,6 +4,9 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+console.log("[RaceMode DB] URL:", SUPABASE_URL ? "SET" : "MISSING");
+console.log("[RaceMode DB] KEY:", SUPABASE_KEY ? "SET (" + SUPABASE_KEY.substring(0,20) + "...)" : "MISSING");
+
 function headers() {
   return {
     'Content-Type': 'application/json',
@@ -20,12 +23,14 @@ function url(table, query = '') {
 export const db = {
   // ── Profiles ──
   async createProfile(data) {
+    console.log("[RaceMode DB] createProfile called with:", data);
     const r = await fetch(url('profiles'), {
       method: 'POST', headers: headers(),
       body: JSON.stringify(data),
     });
-    const rows = await r.json();
-    return rows[0] || null;
+    const text = await r.text();
+    console.log("[RaceMode DB] createProfile response:", r.status, text);
+    try { const rows = JSON.parse(text); return rows[0] || null; } catch(e) { return null; }
   },
 
   async getProfile(id) {
