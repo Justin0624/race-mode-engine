@@ -39,7 +39,7 @@ const LBL = {
   front_wheel_hex:"Front Hex",rear_wheel_hex:"Rear Hex",
 };
 
-function buildSys(prof, setup, sessions, allTrackSetups) {
+function buildSys(prof, setup, sessions, allTrackSetups, approvedCorrections) {
   const sStr = setup ? Object.entries(setup).filter(([,v])=>v&&v!=="unknown").map(([k,v])=>`${LBL[k]||k}: ${v}${B7_KIT[k]&&v!==B7_KIT[k]?` (kit: ${B7_KIT[k]})`:""}`).join("\n") : "No setup loaded.";
   const pStr = prof ? `Name: ${prof.name||"?"}, Car: ${prof.car||"?"}, Location: ${prof.location||"?"}, Track: ${prof.track||"?"}, Experience: ${prof.experience||"?"}, Goals: ${prof.goals||"?"}, Class: ${prof.racingClass||"?"}, Setup source: ${prof.setupSource||"?"}` : "No profile — first-time user.";
   
@@ -61,6 +61,12 @@ function buildSys(prof, setup, sessions, allTrackSetups) {
   if(allTrackSetups?.length){
     trackStr = `${allTrackSetups.length} setups from other drivers at this track:\n` + 
       allTrackSetups.map(s=>`- ${s.brand} ${s.model}: ${JSON.stringify(s.setup)}`).join("\n");
+  }
+
+  // Build verified corrections from experienced drivers
+  let corrStr = "None yet.";
+  if(approvedCorrections?.length){
+    corrStr = approvedCorrections.map(c=>`- ${c.topic}: ${c.correction} (from ${c.driver_name||"experienced driver"}${c.reasoning?`, reason: ${c.reasoning}`:""})`).join("\n");
   }
 
   return `You are Race Mode Engine, an AI pit crew chief for 1/10 scale RC racing. You are an expert on all major platforms: Team Associated (B7, B84, T7), TLR (22X-4, 22 5.0), Yokomo (YZ-2 DTM, CAL), Schumacher, XRAY, Kyosho, and others.
@@ -154,6 +160,10 @@ Universal settings (same across all brands): shock oil weight, diff fluid weight
 Brand-specific settings (need translation): spring rates/colors, piston sizes, ball stud positions, arm geometry.
 When translating setups between platforms, explain WHAT the setting achieves, not just the number.
 
+VERIFIED CORRECTIONS FROM EXPERIENCED DRIVERS (these override your built-in knowledge):
+${corrStr}
+IMPORTANT: If a correction contradicts your knowledge engine below, the correction wins. Real-world experience from verified drivers outranks textbook knowledge.
+
 ${KNOWLEDGE_ENGINE}
 
 TRIBAL KNOWLEDGE & NON-STANDARD PARTS:
@@ -164,12 +174,25 @@ Racers do things that aren't in any manual. Cross-compatible parts from other mo
 - When multiple drivers report the same non-standard mod, it becomes track intelligence
 - Capture WHY they did it if they mention it: "B6 arms give more clearance" or "stiffer flex"
 
+KNOWLEDGE CORRECTIONS FROM EXPERIENCED DRIVERS:
+Experienced drivers may correct something you said. This is VALUABLE — it makes the app better for everyone.
+When a driver says something like "that's wrong", "that's not how it works", "actually on the B7...", or corrects your advice:
+1. ACKNOWLEDGE the correction respectfully: "Thanks for catching that — that's good to know."
+2. ASK them to explain: "Can you tell me more about how it actually works?"
+3. CAPTURE the correction with a tag: [CORRECTION:topic|what_was_wrong|what_is_correct|reasoning]
+4. DO NOT argue or defend your original statement. The driver with hands-on experience outranks your general knowledge.
+5. IMMEDIATELY use the corrected info for the rest of this conversation.
+6. Thank them: "This kind of feedback makes the app better for everyone."
+
+If you're not sure whether they're right, say so honestly: "I appreciate the correction. I'll flag this so it can be verified."
+
 DATA TAGS (include in response when you learn new info — user wont see these):
 [PROFILE:key=value] keys: name, car, track, experience, goals, racingClass, setupSource, location
 [SETUP:key=value] keys use underscores: front_springs, diff_fluid, etc. You can create ANY key — the database is flexible. If someone mentions tire compound, use [SETUP:tire_compound=Green Fuzzbites]. If they mention tire sauce, use [SETUP:tire_sauce=SXT 3.0 45min]. Motor timing, gearing, body, wing brand, track temp — anything relevant goes in setup.
 [SETUP:key=unknown] mark settings as unknown when not yet determined
 [COND:key=value] track/session conditions: track_temp, humidity, grip_level, tire_rule, motor_limit, event_name, layout — any condition that affects setup
 [LOG:note text] log important events — setup changes, coaching results, observations
+[CORRECTION:topic|original|corrected|reasoning] when a driver corrects something you said. Example: [CORRECTION:anti-squat|rear axle height changes anti-squat|rear axle height changes rear roll center not anti-squat|B7 specific geometry]
 Always include relevant tags when conversation reveals new information. The more data you capture, the smarter you get over time.`;
 }
 
@@ -186,12 +209,13 @@ async function ask(msgs, sys) {
 }
 
 function parse(text) {
-  const pu={},su={},cond={},logs=[];let c=text;
+  const pu={},su={},cond={},logs=[],corrections=[];let c=text;
   for(const m of text.matchAll(/\[PROFILE:(\w+)=(.+?)\]/g)){pu[m[1]]=m[2];c=c.replace(m[0],"");}
   for(const m of text.matchAll(/\[SETUP:([\w_]+)=(.+?)\]/g)){su[m[1]]=m[2];c=c.replace(m[0],"");}
   for(const m of text.matchAll(/\[COND:([\w_]+)=(.+?)\]/g)){cond[m[1]]=m[2];c=c.replace(m[0],"");}
+  for(const m of text.matchAll(/\[CORRECTION:(.+?)\|(.+?)\|(.+?)\|(.+?)\]/g)){corrections.push({topic:m[1],original:m[2],corrected:m[3],reasoning:m[4]});c=c.replace(m[0],"");}
   for(const m of text.matchAll(/\[LOG:(.+?)\]/g)){logs.push(m[1]);c=c.replace(m[0],"");}
-  return{c:c.trim(),pu,su,cond,logs};
+  return{c:c.trim(),pu,su,cond,logs,corrections};
 }
 
 function Dots(){return(<div style={{display:"flex",gap:4,padding:"8px 0",alignItems:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:7,height:7,borderRadius:"50%",background:C.textMuted,animation:`tp 1.2s ease-in-out ${i*.15}s infinite`}}/>)}<style>{`@keyframes tp{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}`}</style></div>);}
@@ -278,8 +302,21 @@ export default function App(){
           if(allCars&&allCars.length)trackSetups=allCars;
         }catch(e){}
       }
-      const raw=await ask(h,buildSys(prof,setup,sessions,trackSetups));
-      const{c,pu,su,cond:condUpdates,logs}=parse(raw);
+      // Fetch approved corrections from experienced drivers
+      let approvedCorrections=null;
+      try{
+        const corrs=await db.getApprovedCorrections(20);
+        if(corrs&&corrs.length)approvedCorrections=corrs;
+      }catch(e){}
+      const raw=await ask(h,buildSys(prof,setup,sessions,trackSetups,approvedCorrections));
+      const{c,pu,su,cond:condUpdates,logs,corrections}=parse(raw);
+
+      // Save corrections to database
+      if(corrections.length&&profileId){
+        for(const cor of corrections){
+          try{await db.createCorrection({profile_id:profileId,driver_name:prof?.name||"unknown",driver_experience:prof?.experience||"unknown",topic:cor.topic,original_claim:cor.original,correction:cor.corrected,reasoning:cor.reasoning});}catch(e){}
+        }
+      }
       
       // Handle profile updates
       if(Object.keys(pu).length){

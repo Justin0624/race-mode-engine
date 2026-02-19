@@ -89,6 +89,26 @@ export const db = {
     return await r.json();
   },
 
+  // ── Corrections (knowledge improvements from experienced drivers) ──
+  async createCorrection(data) {
+    const r = await fetch(url('corrections'), {
+      method: 'POST', headers: headers(),
+      body: JSON.stringify(data),
+    });
+    const rows = await r.json();
+    return rows[0] || null;
+  },
+
+  async getApprovedCorrections(limit = 20) {
+    const r = await fetch(url('corrections', `status=eq.approved&select=topic,correction,reasoning,driver_name&order=created_at.desc&limit=${limit}`), { headers: headers() });
+    return await r.json();
+  },
+
+  async getPendingCorrections() {
+    const r = await fetch(url('corrections', `status=eq.pending&select=*&order=created_at.desc`), { headers: headers() });
+    return await r.json();
+  },
+
   // ── Track Intelligence ──
   async getTrackSetups(trackName, excludeProfileId) {
     // Get all cars from profiles that race at this track (excluding current user)
