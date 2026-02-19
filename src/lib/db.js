@@ -7,6 +7,17 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 console.log("[RaceMode DB] URL:", SUPABASE_URL ? "SET" : "MISSING");
 console.log("[RaceMode DB] KEY:", SUPABASE_KEY ? "SET (" + SUPABASE_KEY.substring(0,20) + "...)" : "MISSING");
 
+// Immediate DB test on load
+(async()=>{
+  if(!SUPABASE_URL||!SUPABASE_KEY){console.error("[RaceMode DB] CANNOT CONNECT — missing env vars");return;}
+  try{
+    console.log("[RaceMode DB] Testing connection...");
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1`,{headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});
+    const text=await r.text();
+    console.log("[RaceMode DB] Test response:",r.status,text);
+  }catch(e){console.error("[RaceMode DB] Test FAILED:",e);}
+})();
+
 function headers() {
   return {
     'Content-Type': 'application/json',
