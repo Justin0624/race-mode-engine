@@ -208,6 +208,8 @@ export default function App(){
   const[profileId,setProfileId]=useState(null);
   const[carId,setCarId]=useState(null);
   const[loading,setLoading]=useState(true);
+  const[report,setReport]=useState(null);
+  const[reportBusy,setReportBusy]=useState(false);
   const end=useRef(null);
   const saveTimer=useRef(null);
 
@@ -325,8 +327,77 @@ export default function App(){
 
   const resetProfile=async()=>{
     localStorage.removeItem('race_mode_profile_id');
-    setProf(null);setSetup(null);setSessions([]);setMsgs([]);setProfileId(null);setCarId(null);
+    setProf(null);setSetup(null);setSessions([]);setMsgs([]);setProfileId(null);setCarId(null);setReport(null);
     go([{role:"user",text:"I just opened the Race Mode app for the first time. Start the onboarding."}],true);
+  };
+
+  const generateReport=async(sessionData)=>{
+    setReportBusy(true);
+    try{
+      const sys=`You generate race reports for social media sharing. Write a clean, shareable race report based on the session data provided. Format it exactly like this with line breaks:
+
+🏁 RACE REPORT — [TRACK NAME]
+[Driver Name] | [Car] | [Class]
+[Date]
+
+📊 Results
+Qualifying: [position or "N/A"]
+Main: [result]
+Best Lap: [time or "N/A"]
+
+🔧 Setup Changes
+[List key changes made during the session, with before → after values]
+
+📝 Notes
+[2-3 sentence summary of how the session went, what worked, what didn't]
+
+${prof?.track?`Track: ${prof.track}`:""}
+${prof?.name?`Driver: ${prof.name}`:""}
+
+Keep it concise and hype — this goes on Facebook/Instagram. End with:
+
+Powered by Race Mode Engine 🏁`;
+
+      const userMsg=sessionData||`Generate a race report from my recent session. Here's what I know:
+Driver: ${prof?.name||"?"}
+Car: ${prof?.car||"?"}
+Track: ${prof?.track||"?"}  
+Class: ${prof?.racingClass||"?"}
+Setup changes: ${sessions.length?sessions.slice(-3).map(s=>s.notes).join("; "):"None logged"}
+Current setup highlights: ${setup?Object.entries(setup).filter(([k,v])=>v&&v!==B7_KIT[k]&&v!=="unknown").slice(0,8).map(([k,v])=>`${LBL[k]||k}: ${v}`).join(", "):"Kit spec"}`;
+
+      const r=await fetch("/api/chat",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({system:sys,messages:[{role:"user",content:userMsg}]})
+      });
+      const d=await r.json();
+      if(d.error)throw new Error(JSON.stringify(d));
+      const text=d.content?.map(c=>c.text||"").join("\n")||"Couldn't generate report.";
+      setReport(text);
+    }catch(e){
+      setReport("Error generating report. Try again.");
+    }
+    setReportBusy(false);
+  };
+
+  const copyReport=()=>{
+    if(!report)return;
+    navigator.clipboard.writeText(report).then(()=>{
+      alert("Report copied! Paste it on Facebook, Instagram, or anywhere.");
+    }).catch(()=>{
+      // Fallback for mobile
+      const ta=document.createElement("textarea");
+      ta.value=report;document.body.appendChild(ta);ta.select();
+      document.execCommand("copy");document.body.removeChild(ta);
+      alert("Report copied!");
+    });
+  };
+
+  const shareReport=async()=>{
+    if(!report)return;
+    if(navigator.share){
+      try{await navigator.share({title:"Race Report",text:report});}catch(e){}
+    }else{copyReport();}
   };
 
   if(loading)return(
@@ -363,7 +434,26 @@ export default function App(){
         {setup?<SetupView setup={setup}/>:<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>No setup yet. Chat with the coach to get started.</div>}
       </div>):tab==="log"?(<div style={{flex:1,overflowY:"auto",padding:14}}>
         <div style={{fontSize:14,fontWeight:600,color:C.white,marginBottom:10}}>Session Log</div>
-        {sessions.length?sessions.map((s,i)=>(<div key={i} style={{padding:12,background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:10,marginBottom:6}}><div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{s.date}</div><div style={{fontSize:13,color:C.text}}>{s.notes}</div></div>)):<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>No sessions yet.</div>}
+        
+        {/* Race Report Generator */}
+        <div style={{padding:14,background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:12,marginBottom:14}}>
+          <div style={{fontSize:13,fontWeight:600,color:C.white,marginBottom:8}}>📝 Race Report</div>
+          {!report?(<div>
+            <div style={{fontSize:12,color:C.textDim,marginBottom:10}}>Tell the AI about your results and it'll generate a shareable race report.</div>
+            <input id="reportInput" placeholder='e.g. "Qualified 3rd, won the A main, best lap 18.2"' style={{width:"100%",padding:"10px 12px",background:C.inputBg,border:`1px solid ${C.inputBorder}`,borderRadius:8,color:C.text,fontSize:13,fontFamily:"inherit",outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
+            <button onClick={()=>{const v=document.getElementById("reportInput").value;generateReport(v||null);}} disabled={reportBusy} style={{width:"100%",padding:"10px",background:reportBusy?C.inputBg:C.accent,border:"none",borderRadius:8,color:C.white,fontSize:13,fontWeight:600,cursor:reportBusy?"default":"pointer",fontFamily:"inherit",opacity:reportBusy?.5:1}}>{reportBusy?"Generating...":"Generate Race Report 🏁"}</button>
+          </div>):(<div>
+            <div style={{padding:12,background:C.bg,borderRadius:8,marginBottom:10,whiteSpace:"pre-wrap",fontSize:13,lineHeight:1.6,color:C.text}}>{report}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={shareReport} style={{flex:1,padding:"10px",background:C.accent,border:"none",borderRadius:8,color:C.white,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Share 📤</button>
+              <button onClick={copyReport} style={{flex:1,padding:"10px",background:C.inputBg,border:`1px solid ${C.inputBorder}`,borderRadius:8,color:C.text,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Copy 📋</button>
+              <button onClick={()=>setReport(null)} style={{padding:"10px 14px",background:C.inputBg,border:`1px solid ${C.inputBorder}`,borderRadius:8,color:C.textMuted,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>↻</button>
+            </div>
+          </div>)}
+        </div>
+
+        {/* Session List */}
+        {sessions.length?sessions.map((s,i)=>(<div key={i} style={{padding:12,background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:10,marginBottom:6}}><div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{s.date}{s.track?` · ${s.track}`:""}</div><div style={{fontSize:13,color:C.text}}>{s.notes}</div></div>)):<div style={{textAlign:"center",padding:20,color:C.textMuted,fontSize:13}}>No sessions logged yet. Chat with the coach during a race night to start logging.</div>}
       </div>):(<div style={{flex:1,overflowY:"auto",padding:14}}>
         <div style={{fontSize:14,fontWeight:600,color:C.white,marginBottom:10}}>Driver Profile</div>
         {prof?<div style={{display:"flex",flexDirection:"column",gap:6}}>{[["Name",prof.name],["Location",prof.location],["Car",prof.car],["Track",prof.track],["Experience",prof.experience],["Class",prof.racingClass],["Goals",prof.goals]].filter(([,v])=>v).map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:8}}><span style={{fontSize:12,color:C.textMuted}}>{l}</span><span style={{fontSize:12,color:C.white,fontWeight:500}}>{v}</span></div>))}<button onClick={resetProfile} style={{marginTop:20,padding:"10px",background:"transparent",border:`1px solid #ef444440`,borderRadius:8,color:"#ef4444",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Reset Profile &amp; Start Over</button></div>:<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>Chat with the coach to build your profile.</div>}
