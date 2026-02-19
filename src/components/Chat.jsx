@@ -243,7 +243,7 @@ export default function App(){
 
   useEffect(()=>{end.current?.scrollIntoView({behavior:"smooth"});},[msgs,busy]);
 
-  // Load existing profile from database on startup
+  // Load existing profile from database on startup, fallback to localStorage
   useEffect(()=>{
     (async()=>{
       try{
@@ -253,16 +253,13 @@ export default function App(){
           if(p){
             setProfileId(p.id);
             setProf({name:p.name,location:p.location,track:p.home_track,experience:p.experience,goals:p.goals,racingClass:p.racing_class});
-            // Load their car and setup
             const cars=await db.getCars(p.id);
             if(cars.length){
               setCarId(cars[0].id);
               setSetup(cars[0].setup&&Object.keys(cars[0].setup).length?cars[0].setup:null);
             }
-            // Load sessions
             const sess=await db.getSessions(p.id,10);
             if(sess.length)setSessions(sess.map(s=>({date:new Date(s.created_at).toLocaleDateString(),notes:s.notes||""})));
-            // Load conversation
             const conv=await db.getConversation(p.id);
             if(conv&&conv.messages&&conv.messages.length){
               setMsgs(conv.messages);
@@ -271,16 +268,44 @@ export default function App(){
             }
           }
         }
-      }catch(e){console.warn("DB load failed, starting fresh:",e);}
-      // No existing profile — start onboarding
+      }catch(e){console.warn("DB load failed:",e);}
+      
+      // Fallback: load from localStorage
+      try{
+        const lsProf=localStorage.getItem('race_mode_profile');
+        const lsMsgs=localStorage.getItem('race_mode_msgs');
+        const lsSetup=localStorage.getItem('race_mode_setup');
+        const lsSessions=localStorage.getItem('race_mode_sessions');
+        if(lsProf||lsMsgs){
+          console.log("[RaceMode] Loading from localStorage backup");
+          if(lsProf)setProf(JSON.parse(lsProf));
+          if(lsSetup)setSetup(JSON.parse(lsSetup));
+          if(lsSessions)setSessions(JSON.parse(lsSessions));
+          if(lsMsgs){
+            setMsgs(JSON.parse(lsMsgs));
+            setLoading(false);
+            return;
+          }
+        }
+      }catch(e){console.warn("localStorage load failed:",e);}
+      
+      // Nothing found anywhere — start onboarding
       setLoading(false);
       go([{role:"user",text:"I just opened the Race Mode app for the first time. Start the onboarding."}],true);
     })();
   },[]);
 
   // Save to database after profile/setup/messages change (debounced)
+  // Also save to localStorage as backup
   useEffect(()=>{
-    if(!profileId||loading)return;
+    if(loading)return;
+    // Always save to localStorage as backup
+    if(prof)localStorage.setItem('race_mode_profile',JSON.stringify(prof));
+    if(setup)localStorage.setItem('race_mode_setup',JSON.stringify(setup));
+    if(sessions.length)localStorage.setItem('race_mode_sessions',JSON.stringify(sessions));
+    if(msgs.length)localStorage.setItem('race_mode_msgs',JSON.stringify(msgs));
+    
+    if(!profileId)return;
     clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(async()=>{
       try{
@@ -288,8 +313,8 @@ export default function App(){
         if(setup&&carId)await db.updateCar(carId,{setup});
         if(msgs.length)await db.saveConversation(profileId,msgs);
       }catch(e){console.warn("DB save failed:",e);}
-    },2000); // Save 2s after last change
-  },[prof,setup,msgs]);
+    },2000);
+  },[prof,setup,msgs,sessions]);
 
   const go=async(h,init=false)=>{
     setBusy(true);
@@ -373,6 +398,10 @@ export default function App(){
 
   const resetProfile=async()=>{
     localStorage.removeItem('race_mode_profile_id');
+    localStorage.removeItem('race_mode_profile');
+    localStorage.removeItem('race_mode_setup');
+    localStorage.removeItem('race_mode_sessions');
+    localStorage.removeItem('race_mode_msgs');
     setProf(null);setSetup(null);setSessions([]);setMsgs([]);setProfileId(null);setCarId(null);setReport(null);
     go([{role:"user",text:"I just opened the Race Mode app for the first time. Start the onboarding."}],true);
   };
