@@ -155,10 +155,11 @@ ${KNOWLEDGE_ENGINE}
 
 DATA TAGS (include in response when you learn new info — user wont see these):
 [PROFILE:key=value] keys: name, car, track, experience, goals, racingClass, setupSource, location
-[SETUP:key=value] keys use underscores: front_springs, diff_fluid, etc
+[SETUP:key=value] keys use underscores: front_springs, diff_fluid, etc. You can create ANY key — the database is flexible. If someone mentions tire compound, use [SETUP:tire_compound=Green Fuzzbites]. If they mention tire sauce, use [SETUP:tire_sauce=SXT 3.0 45min]. Motor timing, gearing, body, wing brand, track temp — anything relevant goes in setup.
 [SETUP:key=unknown] mark settings as unknown when not yet determined
-[LOG:note text] log important events
-Always include relevant tags when conversation reveals new information.`;
+[COND:key=value] track/session conditions: track_temp, humidity, grip_level, tire_rule, motor_limit, event_name, layout — any condition that affects setup
+[LOG:note text] log important events — setup changes, coaching results, observations
+Always include relevant tags when conversation reveals new information. The more data you capture, the smarter you get over time.`;
 }
 
 async function ask(msgs, sys) {
@@ -174,11 +175,12 @@ async function ask(msgs, sys) {
 }
 
 function parse(text) {
-  const pu={},su={},logs=[];let c=text;
+  const pu={},su={},cond={},logs=[];let c=text;
   for(const m of text.matchAll(/\[PROFILE:(\w+)=(.+?)\]/g)){pu[m[1]]=m[2];c=c.replace(m[0],"");}
   for(const m of text.matchAll(/\[SETUP:([\w_]+)=(.+?)\]/g)){su[m[1]]=m[2];c=c.replace(m[0],"");}
+  for(const m of text.matchAll(/\[COND:([\w_]+)=(.+?)\]/g)){cond[m[1]]=m[2];c=c.replace(m[0],"");}
   for(const m of text.matchAll(/\[LOG:(.+?)\]/g)){logs.push(m[1]);c=c.replace(m[0],"");}
-  return{c:c.trim(),pu,su,logs};
+  return{c:c.trim(),pu,su,cond,logs};
 }
 
 function Dots(){return(<div style={{display:"flex",gap:4,padding:"8px 0",alignItems:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:7,height:7,borderRadius:"50%",background:C.textMuted,animation:`tp 1.2s ease-in-out ${i*.15}s infinite`}}/>)}<style>{`@keyframes tp{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}`}</style></div>);}
@@ -263,7 +265,7 @@ export default function App(){
         }catch(e){}
       }
       const raw=await ask(h,buildSys(prof,setup,sessions,trackSetups));
-      const{c,pu,su,logs}=parse(raw);
+      const{c,pu,su,cond:condUpdates,logs}=parse(raw);
       
       // Handle profile updates
       if(Object.keys(pu).length){
