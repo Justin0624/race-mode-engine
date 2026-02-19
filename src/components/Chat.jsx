@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import KNOWLEDGE_ENGINE from "../lib/knowledge-engine.js";
+import { db, getDeviceProfileId, setDeviceProfileId } from "../lib/db.js";
 
 const C = {
   bg: "#07080c", chatBg: "#0c0d12", userBubble: "#1a3a6e", botBubble: "#161720",
@@ -158,18 +159,96 @@ export default function App(){
   const[prof,setProf]=useState(null);
   const[setup,setSetup]=useState(null);
   const[sessions,setSessions]=useState([]);
+  const[profileId,setProfileId]=useState(null);
+  const[carId,setCarId]=useState(null);
+  const[loading,setLoading]=useState(true);
   const end=useRef(null);
+  const saveTimer=useRef(null);
 
   useEffect(()=>{end.current?.scrollIntoView({behavior:"smooth"});},[msgs,busy]);
-  useEffect(()=>{go([{role:"user",text:"I just opened the Race Mode app for the first time. Start the onboarding."}],true);},[]);
+
+  // Load existing profile from database on startup
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const existingId=getDeviceProfileId();
+        if(existingId){
+          const p=await db.getProfile(existingId);
+          if(p){
+            setProfileId(p.id);
+            setProf({name:p.name,location:p.location,track:p.home_track,experience:p.experience,goals:p.goals,racingClass:p.racing_class});
+            // Load their car and setup
+            const cars=await db.getCars(p.id);
+            if(cars.length){
+              setCarId(cars[0].id);
+              setSetup(cars[0].setup&&Object.keys(cars[0].setup).length?cars[0].setup:null);
+            }
+            // Load sessions
+            const sess=await db.getSessions(p.id,10);
+            if(sess.length)setSessions(sess.map(s=>({date:new Date(s.created_at).toLocaleDateString(),notes:s.notes||""})));
+            // Load conversation
+            const conv=await db.getConversation(p.id);
+            if(conv&&conv.messages&&conv.messages.length){
+              setMsgs(conv.messages);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      }catch(e){console.warn("DB load failed, starting fresh:",e);}
+      // No existing profile — start onboarding
+      setLoading(false);
+      go([{role:"user",text:"I just opened the Race Mode app for the first time. Start the onboarding."}],true);
+    })();
+  },[]);
+
+  // Save to database after profile/setup/messages change (debounced)
+  useEffect(()=>{
+    if(!profileId||loading)return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(async()=>{
+      try{
+        if(prof)await db.updateProfile(profileId,{name:prof.name,location:prof.location,home_track:prof.track,experience:prof.experience,goals:prof.goals,racing_class:prof.racingClass});
+        if(setup&&carId)await db.updateCar(carId,{setup});
+        if(msgs.length)await db.saveConversation(profileId,msgs);
+      }catch(e){console.warn("DB save failed:",e);}
+    },2000); // Save 2s after last change
+  },[prof,setup,msgs]);
 
   const go=async(h,init=false)=>{
     setBusy(true);
     try{
       const raw=await ask(h,buildSys(prof,setup,sessions));
       const{c,pu,su,logs}=parse(raw);
-      if(Object.keys(pu).length)setProf(p=>({...(p||{}),...pu}));
-      if(Object.keys(su).length)setSetup(p=>({...(p||{...B7_KIT}),...su}));
+      
+      // Handle profile updates
+      if(Object.keys(pu).length){
+        const newProf={...(prof||{}),...pu};
+        setProf(newProf);
+        // Create profile in DB if first time
+        if(!profileId&&(pu.name||pu.car)){
+          try{
+            const created=await db.createProfile({name:newProf.name,location:newProf.location,home_track:newProf.track,experience:newProf.experience,goals:newProf.goals,racing_class:newProf.racingClass});
+            if(created){
+              setProfileId(created.id);
+              setDeviceProfileId(created.id);
+              // Create car if we know it
+              if(newProf.car){
+                const brand=newProf.car.includes("TLR")||newProf.car.includes("22")?"TLR":newProf.car.includes("Yokomo")||newProf.car.includes("YZ")?"Yokomo":"Team Associated";
+                const car=await db.createCar({profile_id:created.id,brand,model:newProf.car,setup:{...B7_KIT},kit_baseline:{...B7_KIT},setup_source:newProf.setupSource||"kit"});
+                if(car)setCarId(car.id);
+              }
+            }
+          }catch(e){console.warn("DB create failed:",e);}
+        }
+      }
+      
+      // Handle setup updates  
+      if(Object.keys(su).length){
+        const newSetup={...(setup||{...B7_KIT}),...su};
+        setSetup(newSetup);
+      }
+      
       if(logs.length)setSessions(p=>[...p,...logs.map(l=>({date:new Date().toLocaleDateString(),notes:l}))]);
       if(init)setMsgs([{role:"bot",text:c}]);else setMsgs(p=>[...p,{role:"bot",text:c}]);
     }catch(e){
@@ -180,6 +259,21 @@ export default function App(){
   };
 
   const send=()=>{if(!input.trim()||busy)return;const t=input.trim();setInput("");const nm=[...msgs,{role:"user",text:t}];setMsgs(nm);go(nm);};
+
+  const resetProfile=async()=>{
+    localStorage.removeItem('race_mode_profile_id');
+    setProf(null);setSetup(null);setSessions([]);setMsgs([]);setProfileId(null);setCarId(null);
+    go([{role:"user",text:"I just opened the Race Mode app for the first time. Start the onboarding."}],true);
+  };
+
+  if(loading)return(
+    <div style={{background:C.bg,height:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"-apple-system,'SF Pro Text','Segoe UI',system-ui,sans-serif"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:12}}>🏁</div>
+        <div style={{color:C.textDim,fontSize:14}}>Loading your profile...</div>
+      </div>
+    </div>
+  );
 
   return(
     <div style={{background:C.bg,height:"100dvh",display:"flex",flexDirection:"column",fontFamily:"-apple-system,'SF Pro Text','Segoe UI',system-ui,sans-serif",color:C.text,maxWidth:500,margin:"0 auto"}}>
@@ -209,7 +303,7 @@ export default function App(){
         {sessions.length?sessions.map((s,i)=>(<div key={i} style={{padding:12,background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:10,marginBottom:6}}><div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{s.date}</div><div style={{fontSize:13,color:C.text}}>{s.notes}</div></div>)):<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>No sessions yet.</div>}
       </div>):(<div style={{flex:1,overflowY:"auto",padding:14}}>
         <div style={{fontSize:14,fontWeight:600,color:C.white,marginBottom:10}}>Driver Profile</div>
-        {prof?<div style={{display:"flex",flexDirection:"column",gap:6}}>{[["Name",prof.name],["Car",prof.car],["Track",prof.track],["Experience",prof.experience],["Class",prof.racingClass],["Goals",prof.goals]].filter(([,v])=>v).map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:8}}><span style={{fontSize:12,color:C.textMuted}}>{l}</span><span style={{fontSize:12,color:C.white,fontWeight:500}}>{v}</span></div>))}</div>:<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>Chat with the coach to build your profile.</div>}
+        {prof?<div style={{display:"flex",flexDirection:"column",gap:6}}>{[["Name",prof.name],["Location",prof.location],["Car",prof.car],["Track",prof.track],["Experience",prof.experience],["Class",prof.racingClass],["Goals",prof.goals]].filter(([,v])=>v).map(([l,v])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",background:C.botBubble,border:`1px solid ${C.botBorder}`,borderRadius:8}}><span style={{fontSize:12,color:C.textMuted}}>{l}</span><span style={{fontSize:12,color:C.white,fontWeight:500}}>{v}</span></div>))}<button onClick={resetProfile} style={{marginTop:20,padding:"10px",background:"transparent",border:`1px solid #ef444440`,borderRadius:8,color:"#ef4444",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Reset Profile &amp; Start Over</button></div>:<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>Chat with the coach to build your profile.</div>}
       </div>)}
 
       <div style={{display:"flex",borderTop:`1px solid ${C.navBorder}`,background:C.navBg,flexShrink:0}}>
