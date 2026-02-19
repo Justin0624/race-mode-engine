@@ -286,14 +286,37 @@ export default function App(){
         const lsSessions=localStorage.getItem('race_mode_sessions');
         if(lsProf||lsMsgs){
           console.log("[RaceMode] Loading from localStorage backup");
-          if(lsProf)setProf(JSON.parse(lsProf));
-          if(lsSetup)setSetup(JSON.parse(lsSetup));
+          const parsedProf=lsProf?JSON.parse(lsProf):null;
+          const parsedSetup=lsSetup?JSON.parse(lsSetup):null;
+          if(lsProf)setProf(parsedProf);
+          if(lsSetup)setSetup(parsedSetup);
           if(lsSessions)setSessions(JSON.parse(lsSessions));
-          if(lsMsgs){
-            setMsgs(JSON.parse(lsMsgs));
-            setLoading(false);
-            return;
+          if(lsMsgs)setMsgs(JSON.parse(lsMsgs));
+          
+          // Sync localStorage data to database if no DB record exists
+          if(parsedProf&&(parsedProf.name||parsedProf.car||parsedProf.track)){
+            console.log("[RaceMode] Syncing localStorage profile to database...");
+            try{
+              const created=await db.createProfile({name:parsedProf.name||null,location:parsedProf.location||null,home_track:parsedProf.track||null,experience:parsedProf.experience||null,goals:parsedProf.goals||null,racing_class:parsedProf.racingClass||null});
+              console.log("[RaceMode] DB sync result:",created);
+              if(created){
+                setProfileId(created.id);
+                setDeviceProfileId(created.id);
+                if(parsedProf.car){
+                  const brand=parsedProf.car.includes("TLR")||parsedProf.car.includes("22")?"TLR":parsedProf.car.includes("Yokomo")||parsedProf.car.includes("YZ")?"Yokomo":"Team Associated";
+                  const car=await db.createCar({profile_id:created.id,brand,model:parsedProf.car,setup:parsedSetup||{...B7_KIT},kit_baseline:{...B7_KIT},setup_source:parsedProf.setupSource||"kit"});
+                  if(car)setCarId(car.id);
+                }
+                // Save conversation too
+                const parsedMsgs=lsMsgs?JSON.parse(lsMsgs):null;
+                if(parsedMsgs&&parsedMsgs.length)await db.saveConversation(created.id,parsedMsgs);
+                console.log("[RaceMode] Full sync to database complete!");
+              }
+            }catch(e){console.warn("[RaceMode] DB sync failed:",e);}
           }
+          
+          setLoading(false);
+          return;
         }
       }catch(e){console.warn("localStorage load failed:",e);}
       
